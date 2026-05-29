@@ -117,7 +117,7 @@ Block {
   BraceL Stmt* BraceR
 }
 BindingProperty {
-  (Ident (Op_3d Expr | Colon BindingElement | ) | (String | Number | BracketL Expr BracketR) Colon BindingElement | Spread (Ident | BindingPattern))
+  (Ident Colon BindingElement | Ident (Op_3d Expr)? | (String | Number | BracketL Expr BracketR) Colon BindingElement | Spread (Ident | BindingPattern))
 }
 BindingElement {
   (Ident | BindingPattern) (Op_3d Expr)?

@@ -62,6 +62,41 @@ const TripleSlash  = token(/\/\/\/\s*<[^\n]*/,    { skip: true, scope: 'comment.
 const LineComment  = token(/\/\/[^\n]*/,           { skip: true });
 const BlockComment = token(/\/\*[\s\S]*?\*\//,     { skip: true });
 
+// ── Always-reserved words ──
+// The `Ident` token deliberately swallows keywords (they lex as identifiers), so
+// every keyword can otherwise fall back to a bare identifier. These words are
+// reserved in EVERY context (ECMAScript ReservedWord ∪ TS's always-reserved), so
+// they are valid as an identifier NOWHERE — not as an expression, a shorthand
+// property, or a binding name. `notReserved` is a zero-width guard placed before an
+// identifier position to forbid exactly these. Excluded on purpose: contextual
+// keywords (as/async/from/type/of/…) and strict-mode-only reserved words
+// (let/static/implements/yield/await/…) — those ARE valid identifiers in some
+// context a CFG can't detect (sloppy mode, non-generator/non-async), so forbidding
+// them here would reject valid code (`var let = 1`, `function f(yield) {}`).
+const notReserved = not(alt(
+  'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default',
+  'delete', 'do', 'else', 'enum', 'export', 'extends', 'false', 'finally', 'for',
+  'function', 'if', 'import', 'in', 'instanceof', 'new', 'null', 'return', 'super',
+  'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void', 'while', 'with',
+));
+
+// A NARROWER guard for the *expression* identifier-NUD only. The full `notReserved`
+// set can NOT be used at expression position: most always-reserved words legitimately
+// begin an expression via their own dedicated forms (`new`/`new.target`, `class`/
+// `function` expressions, `import(…)`/`import<T>`, `super`, `this`, `true`/`false`/
+// `null`, …), and TS's own error-recovery tolerates several reserved words sliding into
+// the bare-identifier fallback inside otherwise-valid files (e.g. `export default …`,
+// undeclared `for (x in …)`, `class … extends (e)`, a decorator before `export`). The
+// words below have NO such role: they are the prefix operators `void`/`typeof`/`delete`
+// (which must take an operand) plus the `catch`/`throw` keywords and `enum`. Forbidding
+// the bare-identifier fallback for exactly these rejects `catch(x){}` with no `try`,
+// `void ;`/`typeof ;`/`delete ;` (operatorless prefix op), and `throw ;` — while leaving
+// every valid expression (and TS's recovery cases) untouched. Verified: widening this
+// set to other reserved words regresses valid code; these five are the FN-safe maximum.
+const notReservedExpr = not(alt(
+  'catch', 'delete', 'enum', 'throw', 'typeof', 'void',
+));
+
 // ── Type query reference (typeof's argument: just dotted identifiers) ──
 
 const TypeofRef = rule($ => [
@@ -155,8 +190,10 @@ const Prop = rule($ => {
     // value property — any member name incl computed `[e]: v` (MemberName covers `[Expr]`)
     [MemberName, ':', Expr],
     ['[', Expr, many(',', Expr), ']', ':', Expr],                      // computed comma list (lenient)
-    // shorthand (Ident only): x | x = v | x? | x?: v
-    [Ident, alt(['=', Expr], ['?', opt(':', Expr)], [])],
+    // shorthand (Ident only): x | x = v | x? | x?: v — a reserved word here is invalid
+    // (`var v = { class }`); a reserved word as a property KEY (`{ class: 1 }`) is fine,
+    // already handled by the `[MemberName, ':', Expr]` branch above.
+    [notReserved, Ident, alt(['=', Expr], ['?', opt(':', Expr)], [])],
   ];
 });
 
@@ -175,10 +212,12 @@ const NewTarget = rule($ => [
 ]);
 
 const Expr = rule($ => [
-  // `enum` is reserved — it can't be a standalone expression identifier. Without this
-  // an invalid `enum E { a: 1 }` (where the enum Decl fails on `:`) would fall back to
-  // parsing `enum` as an identifier expr + `E` + `{…}` block, wrongly accepting it.
-  [not('enum'), Ident],
+  // A standalone identifier expression, but never a reserved word that has no expression
+  // role (see notReservedExpr). This kills the bare-identifier fallback for keywords like
+  // `catch`/`throw` and the prefix operators `void`/`typeof`/`delete`, so `catch(x){}`
+  // with no `try`, `void ;`, and `throw ;` are rejected as TS does. (`enum` is included —
+  // it previously had its own `not('enum')` guard for the same reason.)
+  [notReservedExpr, Ident],
   Number_,
   String_,
   Template,
@@ -245,18 +284,23 @@ const Block = rule($ => [
 // ── Destructuring Patterns ──
 
 const BindingProperty = rule($ => [
-  [Ident, alt(['=', Expr], [':', BindingElement], [])],  // a | a = 1 | a: elem
+  // `name: elem` — the KEY is a PropertyName, so a reserved word is allowed here
+  // (`{ while: y }`); the bound name inside `elem` is guarded by BindingElement.
+  [Ident, ':', BindingElement],
+  // shorthand `a` / shorthand-with-default `a = 1` — the name is a BindingIdentifier,
+  // so a reserved word is invalid (`{ while }`, `{ class }`).
+  [notReserved, Ident, opt('=', Expr)],
   [alt(String_, Number_, ['[', Expr, ']']), ':', BindingElement],  // "s"/0/[e]: elem
-  ['...', alt(Ident, BindingPattern)],                   // ...rest | ...{ a }
+  ['...', alt([notReserved, Ident], BindingPattern)],    // ...rest | ...{ a }
 ]);
 
 const BindingElement = rule($ => [
-  [alt(Ident, BindingPattern), opt('=', Expr)],          // a | { a }  (optionally = default)
+  [alt([notReserved, Ident], BindingPattern), opt('=', Expr)],  // a | { a }  (optionally = default)
 ]);
 
 const ArrayBindingElement = rule($ => [
   BindingElement,
-  ['...', alt(Ident, BindingPattern)],                   // [...rest] | [...{ a }]
+  ['...', alt([notReserved, Ident], BindingPattern)],    // [...rest] | [...{ a }]
 ]);
 
 const BindingPattern = rule($ => [
@@ -267,22 +311,29 @@ const BindingPattern = rule($ => [
 // ── Bindings & Parameters ──
 
 const Binding = rule($ => [
-  [alt([Ident, opt('!')], BindingPattern), opt(':', Type), opt('=', Expr)],
+  [alt([notReserved, Ident, opt('!')], BindingPattern), opt(':', Type), opt('=', Expr)],
 ]);
 
 // A binding in a for-head: identical to Binding except the initializer is a
 // no-`in` expression, so `for (var a = 1 in xs)` reads `a = 1` then the for-in
 // `in` (TS's [~In] grammar), rather than greedily parsing `1 in xs`.
 const ForBinding = rule($ => [
-  [alt([Ident, opt('!')], BindingPattern), opt(':', Type), opt('=', exclude('in', Expr))],
+  [alt([notReserved, Ident, opt('!')], BindingPattern), opt(':', Type), opt('=', exclude('in', Expr))],
 ]);
 
 const Param = rule($ => {
   const tail = [opt('?'), opt(':', Type), opt('=', Expr)];   // ?  : T  = E
   const body = alt(
+    // NOTE: a plain parameter name is NOT reserved-guarded — `this` is a valid first
+    // parameter even without an annotation (`function f(this, a)`: the implicit-any
+    // `this`-param), and `this` is an always-reserved word; guarding here would reject
+    // that valid form. (A truly reserved param name like `function f(while)` stays an
+    // accepted over-accept; it's out of this gap's scope.)
     [Ident, ...tail],
     [BindingPattern, ...tail],
-    ['...', alt(Ident, BindingPattern), opt('?'), opt(':', Type)],   // rest
+    // a rest element, by contrast, can never validly be a reserved word (`...while`),
+    // and `...this` is invalid too, so guarding the rest name is FN-safe.
+    ['...', alt([notReserved, Ident], BindingPattern), opt('?'), opt(':', Type)],   // rest
   );
   return [
     ['this', ':', Type],

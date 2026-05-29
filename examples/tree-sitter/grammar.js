@@ -118,7 +118,7 @@ module.exports = grammar({
 
     block: $ => seq("{", repeat($.stmt), "}"),
 
-    binding_property: $ => choice(seq($.ident, choice(seq("=", $.expr), seq(":", $.binding_element), blank())), seq(choice($.string, $.number, seq("[", $.expr, "]")), ":", $.binding_element), seq("...", choice($.ident, $.binding_pattern))),
+    binding_property: $ => choice(seq($.ident, ":", $.binding_element), seq($.ident, optional(seq("=", $.expr))), seq(choice($.string, $.number, seq("[", $.expr, "]")), ":", $.binding_element), seq("...", choice($.ident, $.binding_pattern))),
 
     binding_element: $ => seq(choice($.ident, $.binding_pattern), optional(seq("=", $.expr))),
 
