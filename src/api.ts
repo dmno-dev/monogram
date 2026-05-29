@@ -61,6 +61,7 @@ export function rule(def: RuleBody, opts?: RuleOptions): RuleRef {
 // ── Special slots for rules ──
 
 interface OpMarker { readonly __kind: 'op' }
+interface SameLineMarker { readonly __kind: 'sameLine' }
 interface PrefixSlot {
   readonly __kind: 'prefix';
   (...ops: string[]): PrefixOps;
@@ -72,9 +73,12 @@ interface PostfixSlot {
 interface PrefixOps { readonly __kind: 'prefix-ops'; ops: string[] }
 interface PostfixOps { readonly __kind: 'postfix-ops'; ops: string[] }
 
-type Marker = OpMarker | PrefixSlot | PostfixSlot;
+type Marker = OpMarker | PrefixSlot | PostfixSlot | SameLineMarker;
 
 export const op: OpMarker = { __kind: 'op' };
+
+// Zero-width "no LineTerminator here" assertion (see RuleExpr 'sameLine').
+export const sameLine: SameLineMarker = { __kind: 'sameLine' };
 
 export const prefix: PrefixSlot = Object.assign(
   (...ops: string[]): PrefixOps => ({ __kind: 'prefix-ops' as const, ops }),
@@ -119,8 +123,15 @@ class AltNode {
   readonly items: Alternative[];
   constructor(items: Alternative[]) { this.items = items; }
 }
+class NotNode {
+  readonly __kind = 'not' as const;
+  // Zero-width negative lookahead over a single element (wrap a sequence in a
+  // group/alt if needed). Matches nothing; succeeds only when `item` can't match.
+  readonly item: Element;
+  constructor(item: Element) { this.item = item; }
+}
 
-type Combinator = SepNode | OptNode | ManyNode | Many1Node | AltNode;
+type Combinator = SepNode | OptNode | ManyNode | Many1Node | AltNode | NotNode;
 
 export function sep(item: Element, delimiter: string): SepNode {
   return new SepNode(item, delimiter);
@@ -140,6 +151,10 @@ export function many1(...items: Element[]): Many1Node {
 
 export function alt(...items: Alternative[]): AltNode {
   return new AltNode(items);
+}
+
+export function not(item: Element): NotNode {
+  return new NotNode(item);
 }
 
 // ── Precedence ──
@@ -227,10 +242,14 @@ function toRuleExpr(el: Element, names: Map<object, string>): RuleExpr {
       }),
     };
   }
+  if (el instanceof NotNode) {
+    return { type: 'not', body: toRuleExpr(el.item, names) };
+  }
   const marker = el as Marker;
   if (marker.__kind === 'op') return { type: 'op' };
   if (marker.__kind === 'prefix') return { type: 'prefix' };
   if (marker.__kind === 'postfix') return { type: 'postfix' };
+  if (marker.__kind === 'sameLine') return { type: 'sameLine' };
   throw new Error(`Unknown element: ${JSON.stringify(el)}`);
 }
 
