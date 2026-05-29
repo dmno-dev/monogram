@@ -45,7 +45,14 @@ function identExtraChars(identRegex: string): string {
   let inClass = false;
   for (let i = 0; i < identRegex.length; i++) {
     const c = identRegex[i];
-    if (c === '\\') { i++; continue; } // skip escaped sequences
+    if (c === '\\') {
+      // Skip the escape and, for braced escapes (`\p{L}`, `\u{...}`), the whole
+      // `{...}` argument — otherwise the `{`/`}`/letters inside would be mistaken
+      // for literal identifier characters.
+      i++;
+      if (identRegex[i + 1] === '{') { while (i < identRegex.length && identRegex[i] !== '}') i++; }
+      continue;
+    }
     if (c === '[') { inClass = true; continue; }
     if (c === ']') { inClass = false; continue; }
     if (inClass && !/[a-zA-Z0-9_\-^]/.test(c)) {
@@ -53,6 +60,34 @@ function identExtraChars(identRegex: string): string {
     }
   }
   return [...extras].map(escapeForCharClass).join('');
+}
+
+// Unicode identifier classes (the same set the parser's lexer accepts for non-ASCII
+// identifiers): `\p{L}\p{Nl}` start, plus `\p{Nd}\p{Mn}\p{Mc}\p{Pc}` continue.
+const UNICODE_ID_START = '\\p{L}\\p{Nl}';
+const UNICODE_ID_CONTINUE = '\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}';
+
+/**
+ * Widen an ASCII-only identifier regex so the emitted TextMate (Oniguruma) pattern
+ * also scopes non-ASCII identifiers (e.g. `Ω`, Cyrillic `А`). The parser's lexer
+ * already accepts these via a Unicode fallback; this gives the highlighter parity.
+ *
+ * An identifier character class is recognised by containing `_` or `$` (the
+ * always-allowed identifier punctuation) — this avoids touching hex classes like
+ * `[0-9a-fA-F]` used by embedded `\uXXXX`/`\u{...}` escape alternatives. The class is
+ * widened in place: it gains the Unicode letter classes, plus the Unicode continue
+ * classes when it ALSO contains digits (`0-9`, i.e. the identifier-CONTINUE class).
+ * ASCII stays a strict subset, so existing matches are unchanged. Oniguruma supports
+ * `\p{...}`; JS regex without the `/u` flag does not — but this widened form feeds
+ * ONLY the TextMate emitter, never the lexer (which compiles the original ASCII token
+ * pattern). If no identifier class is found, the pattern is returned unchanged.
+ */
+function unicodeWidenIdentPattern(identRegex: string): string {
+  return identRegex.replace(/\[[^\]]*\]/g, cls => {
+    if (!/[_$]/.test(cls)) return cls;                   // not an identifier class (e.g. hex) — leave alone
+    const add = /0-9/.test(cls) ? UNICODE_ID_CONTINUE : UNICODE_ID_START;
+    return cls.slice(0, -1) + add + ']';                 // insert before the closing `]`
+  });
 }
 
 /**
@@ -593,6 +628,38 @@ function buildRecursiveTypeRegex(grammar: CstGrammar, typeName: string, identReg
 }
 
 /**
+ * Detect an angle-bracket TYPE-ASSERTION (cast) alternative:
+ *   '<' <typeRef> '>' <operand>
+ * i.e. a literal `<`, then a single ref to a @type rule, then `>`, then a
+ * following item (the operand the cast applies to). This is the TS prefix cast
+ * `<Type>expr`, distinct from `'<' sep(Type) '>'` generics (whose second item is
+ * a `sep`, not a bare ref). Returns the inner type rule name, or null.
+ */
+function detectAngleBracketCast(grammar: CstGrammar): string | null {
+  const typeRuleNameSet = new Set(
+    grammar.rules.filter(r => r.flags.includes('type')).map(r => r.name)
+  );
+  if (typeRuleNameSet.size === 0) return null;
+
+  let found: string | null = null;
+  const walkSeq = (items: RuleExpr[]): void => {
+    for (let i = 0; i + 3 < items.length; i++) {
+      const a = items[i], b = items[i + 1], c = items[i + 2], d = items[i + 3];
+      if (a.type === 'literal' && a.value === '<' &&
+          b.type === 'ref' && typeRuleNameSet.has(b.name) &&
+          c.type === 'literal' && c.value === '>' &&
+          d /* an operand follows the cast */) {
+        found = b.name;
+      }
+    }
+  };
+  for (const rule of grammar.rules) {
+    for (const seq of expandAlts(rule.body)) walkSeq(seq);
+  }
+  return found;
+}
+
+/**
  * Generate all TM repository entries for the 5-layer disambiguation.
  *
  * Layer 1: generic-call       — single-line, < types > CONFIRM on same line
@@ -739,6 +806,53 @@ function generateAngleBracketPatterns(
   };
 
   return result;
+}
+
+/**
+ * Generate the prefix type-assertion (cast) pattern: `<Type>operand`.
+ *
+ * Disambiguation from a `a < b > c` comparison chain is structural and matches
+ * how TS itself parses a prefix cast:
+ *   1. The `<` is at an EXPRESSION-START position — NOT preceded by an
+ *      identifier / `]` / `)` (those open a generic call or are an operand the
+ *      `<` compares against). A bare `<` after `=`, `(`, `,`, `return`, etc.
+ *   2. A balanced `<…>` whose inner content is type-shaped (identifiers,
+ *      qualified `.`, nested generics, `[]`, union/intersection), beginning with
+ *      a type-start char.
+ *   3. The `>` is immediately followed by an operand — the value being cast.
+ * The inner type is scoped via #type-inner (qualified names, generics, etc.).
+ */
+function generateTypeCastPattern(
+  langName: string,
+  identRegex: string,
+  operandStart: string,
+): TmPattern {
+  const tpBegin = `punctuation.definition.typeparameters.begin.${langName}`;
+  const tpEnd = `punctuation.definition.typeparameters.end.${langName}`;
+  // `<` only at expression-start. A prefix cast's `<` is never preceded by a value
+  // OPERAND; a comparison's `<` always is (`a < b`). Reject the cast when `<` is
+  // preceded — across any whitespace — by an operand-ending char: an identifier
+  // char, `)`, `]`, a numeric/quote tail. This keeps `a < b > c`, `f() < g`,
+  // `x] < y` as comparisons (variable-length lookbehind; Oniguruma supports it).
+  // Casts after a keyword that ends in a letter (`return <T>x`) stay a comparison
+  // here — rare, and never a regression (they were unhighlighted before too).
+  const notAfter = `(?<![\\w$)\\]]\\s*)`;
+  // Type-shaped, balanced-angle inner content (kept to type characters so an
+  // ordinary `a < b > c` comparison — whose operands are arbitrary expressions —
+  // is not swallowed). `\g<TC>` recurses for nested generics like `<Array<T>>`.
+  const typeChars = '[\\w$.,\\[\\]\\s|&]';
+  const typeContent = `(?<TC>${typeChars}*(?:<\\g<TC>>${typeChars}*)*)`;
+  // Content must START with a type-start char (identifier / `(` paren-type /
+  // `{` object-type / `[` tuple-type) — never a digit or operator.
+  const typeStart = `[[:alpha:]_$({\\[]`;
+  return {
+    name: `meta.cast.expr.${langName}`,
+    begin: `${notAfter}(<)(?=\\s*${typeStart}${typeContent}>\\s*${operandStart})`,
+    beginCaptures: { '1': { name: tpBegin } },
+    end: '(>)',
+    endCaptures: { '1': { name: tpEnd } },
+    patterns: [{ include: '#type-inner' }],
+  };
 }
 
 // ── Function call detection ──
@@ -1400,7 +1514,10 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
 
   // ── Shared values ──
   const identToken = grammar.tokens.find(t => classifyToken(t.pattern, t.flags).scope === 'variable.other');
-  const identPattern = identToken ? identToken.pattern : '[a-zA-Z_]\\w*';
+  // Widen the identifier pattern so non-ASCII names (`Ω`, Cyrillic `А`) are scoped,
+  // matching the parser lexer's Unicode fallback. This widened form is used only in
+  // TextMate (Oniguruma) output, never by the lexer.
+  const identPattern = identToken ? unicodeWidenIdentPattern(identToken.pattern) : '[a-zA-Z_]\\w*';
 
   // Contextual operator keywords (e.g. `as`/`keyof`/`is`/`satisfies`/`infer`):
   // keyword.operator.expression words that double as identifiers, so they are a
@@ -1423,6 +1540,16 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     for (const [key, pattern] of Object.entries(abPatterns)) {
       repository[key] = pattern;
     }
+    // Prefix type-assertion (cast) `<Type>expr` — only if the grammar has a
+    // `'<' <typeRef> '>' <operand>` alternative. Added BEFORE the generic-call
+    // layers: the cast's `<` is at expression-start (negative ident lookbehind),
+    // mutually exclusive with generic-call's ident lookbehind, but it must beat
+    // the flat #comparison fallback so the inner type reaches #type-inner.
+    const castTypeRule = detectAngleBracketCast(grammar);
+    if (castTypeRule) {
+      repository['type-cast'] = generateTypeCastPattern(langName, identPattern, operandStart);
+      topPatterns.push({ include: '#type-cast' });
+    }
     // Add disambiguation layers to top patterns (order matters!)
     topPatterns.push({ include: '#generic-call' });
     topPatterns.push({ include: '#generic-call-eol' });
@@ -1441,6 +1568,10 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
   }
 
   // ── 2. Token patterns ──
+  // Comment repository keys, collected in declaration order, so type contexts
+  // (a multiline generic arg list spans several lines) can re-include them —
+  // the official grammar allows a comment anywhere a type may appear.
+  const commentIncludeKeys: string[] = [];
   for (const tok of grammar.tokens) {
     // Skip @regex tokens — handled by regex literal disambiguation above
     if (tok.flags.includes('regex')) continue;
@@ -1449,6 +1580,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     const scope = tok.scope ?? classified.scope;  // @scope override wins
     const isBlock = classified.isBlock;
     const key = tok.name.toLowerCase();
+    if (scope.startsWith('comment.')) commentIncludeKeys.push(key);
 
     if (scope === 'string.quoted.other.template') {
       const tmplEscape = tok.escapePattern ?? '\\\\.';
@@ -1540,7 +1672,8 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     } else {
       repository[key] = {
         name: `${scope}.${langName}`,
-        match: tok.pattern,
+        // The bare-identifier rule must scope non-ASCII names too (`Ω`, Cyrillic `А`).
+        match: tok === identToken ? identPattern : tok.pattern,
       };
       topPatterns.push({ include: `#${key}` });
     }
@@ -1746,7 +1879,13 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     } else {
       whileParts.push(`${identPattern}\\b(?!\\s*[.(])`);
     }
-    typeAliasWhile = `^\\s*(?:${whileParts.join('|')})`;
+    // Zero-width lookahead: the `while` clause only TESTS that the next line
+    // continues the type alias — it must not CONSUME the leading token, or it
+    // would steal the first identifier / comment-opener of a continuation line
+    // from the inner type patterns (e.g. a multiline generic arg list, where
+    // the swallowed `string` / `//` then never reaches #type-inner and loses
+    // its support.type.primitive / comment scope).
+    typeAliasWhile = `^(?=\\s*(?:${whileParts.join('|')}))`;
   }
 
   // ── 3b. Declaration pattern detection & generation ──
@@ -1984,6 +2123,19 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
   const directParamKws = detectDirectParamKeywords(grammar, scopeOverrides)
     .filter(d => !declarationKeywords.has(d.keyword));
 
+  // Keywords whose ONLY valid keyword role is a dedicated declaration context
+  // (a `*-declaration` begin/end injected into declaration bodies — e.g.
+  // `constructor` inside a class body). Such a word is a contextual keyword that
+  // doubles as an identifier everywhere else (`return constructor`, `{ constructor: 1 }`,
+  // `let constructor = 2`), so it must be DROPPED from the flat global keyword match
+  // (Section 5) — the declaration context already paints its keyword use, and the flat
+  // match would otherwise mis-scope every identifier use. Same reserved-word test the
+  // contextual-OPERATOR keywords use (collectReservedWords): only words the grammar
+  // proves are valid identifiers somewhere are demoted; truly-reserved direct-param
+  // keywords (none today) would stay in the flat match.
+  const contextDeclaredKws = new Set<string>();
+  const reservedWordsForCtx = collectReservedWords(grammar);
+
   if (directParamKws.length > 0 && repository['declaration-params']) {
     for (const dpk of directParamKws) {
       const key = `${dpk.keyword}-declaration`;
@@ -2002,9 +2154,17 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
         beginCaptures: {
           '1': { name: `${dpk.keywordScope}.${langName}` },
         },
-        end: '(?<=\\})',
+        // End after the body `}` (the inner #code-block consumes a `{ … }` body
+        // first), OR at a `;`/`}` ahead for a body-LESS overload signature
+        // (`constructor(a);`) — without this the context would run away to the
+        // enclosing block's `}` and swallow the next member. Mirrors #method-signature.
+        end: '(?<=\\})|(?=[;}])',
         patterns: innerPatterns,
       };
+      // A non-reserved direct-param keyword is a contextual keyword: its keyword
+      // role is now fully covered by this declaration context, so drop it from the
+      // flat global match (Section 5) to keep its identifier uses un-keyworded.
+      if (!reservedWordsForCtx.has(dpk.keyword)) contextDeclaredKws.add(dpk.keyword);
     }
 
     // Inject direct-param keyword patterns into declaration-body so they fire inside class bodies
@@ -2030,9 +2190,14 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
 
     repository['method-signature'] = {
       name: `meta.method.${langName}`,
-      begin: `\\b(${identPattern})\\s*(?=[<(])`,
+      // An optional `?` can sit between the name and its type-params/params
+      // (`f2?(): void`, `f2?<T>(): T`). The lookahead still requires `<`/`(`
+      // after the (optional) `?`, so this stays disjoint from a property
+      // signature `name?: T` (which has `:` there).
+      begin: `\\b(${identPattern})(\\?)?\\s*(?=[<(])`,
       beginCaptures: {
         '1': { name: `entity.name.function.${langName}` },
+        '2': { name: `keyword.operator.optional.${langName}` },
       },
       end: '(?<=\\})|(?=[;\\}])',
       patterns: msInner,
@@ -2040,6 +2205,17 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
 
     const bodyPatterns = repository['declaration-body'].patterns!;
     bodyPatterns.splice(bodyPatterns.length - 1, 0, { include: '#method-signature' });
+
+    // A method signature can also appear inside a type-literal `{ … }` (e.g.
+    // `type T = { f2(): void }`). Without this, the name `f2` falls through to
+    // #simple-type → entity.name.type. The method-signature pattern keys on
+    // `ident` immediately before `<`/`(`, which is disjoint from the property
+    // signature's `ident` before `?:`/`:` (#type-object-member), so it never
+    // steals a property name — it just promotes method names to
+    // entity.name.function. Injected ahead of the property/simple-type fallbacks.
+    if (repository['type-object-type']) {
+      repository['type-object-type'].patterns!.unshift({ include: '#method-signature' });
+    }
   }
 
   // ── 3e. Member type annotations inside declaration bodies ──
@@ -2548,7 +2724,10 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       const beforeStringKws = kws.filter(k => alwaysBeforeString(k));
       const ctxOpKws = isOperatorExpr ? kws.filter(k => contextualOps.has(k) && !alwaysBeforeString(k)) : [];
       const ctxOpSet = new Set(ctxOpKws);
-      const globalKws = kws.filter(k => !alwaysBeforeString(k) && !ctxOpSet.has(k));
+      // Drop keywords whose keyword role is owned by a dedicated declaration context
+      // (e.g. `constructor` → #constructor-declaration in class bodies). They double
+      // as identifiers everywhere else, so the flat match must not paint them.
+      const globalKws = kws.filter(k => !alwaysBeforeString(k) && !ctxOpSet.has(k) && !contextDeclaredKws.has(k));
       if (globalKws.length > 0) {
         repository[key] = {
           match: `\\b(${globalKws.map(escapeRegex).join('|')})\\b`,
@@ -2604,6 +2783,11 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
         return order(a) - order(b);
       });
       const typeRelatedIncludes = [
+        // Comments first: a `//` / `/* */` may sit anywhere in type position
+        // (notably inside a multiline generic argument list). Without these the
+        // `/` would fall through unmatched and the comment body would be
+        // mis-scoped as a type name.
+        ...commentIncludeKeys.map(key => ({ include: `#${key}` })),
         ...supportConstScopes.map(scope => ({ include: `#scope-${scope.replace(/\./g, '-')}` })),
         ...operatorExprIncludeKeys.map(key => ({ include: `#${key}` })),
       ];
@@ -2796,6 +2980,10 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     if (key === 'generic-call') return -3;
     if (key === 'generic-call-eol') return -2;
     if (key === 'generic-call-multiline') return -1;
+    // Prefix cast `<Type>expr` — its `<` is expression-start (mutually exclusive
+    // with the generic-call ident-lookbehind) but must beat #comparison's flat
+    // `[<>]` and every value/property pattern so the inner type reaches type-inner.
+    if (key === 'type-cast') return -0.5;
     const entry = repository[key];
     const scope = entry?.name ?? '';
     if (scope.startsWith('comment.')) return 0;

@@ -13,6 +13,9 @@
       "include": "#generic-call-multiline"
     },
     {
+      "include": "#type-cast"
+    },
+    {
       "include": "#shebang"
     },
     {
@@ -274,7 +277,7 @@
   "repository": {
     "generic-call": {
       "name": "meta.generic.typescript",
-      "begin": "(?<=[\\w$\\]\\)])(<)(?=\\s*(?<T>(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\s*<\\s*\\g<T>(?:\\s*,\\s*\\g<T>)*\\s*>)?)\\s*(?:,\\s*\\g<T>)*\\s*>\\s*[\\(`])",
+      "begin": "(?<=[\\w$\\]\\)])(<)(?=\\s*(?<T>(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\s*<\\s*\\g<T>(?:\\s*,\\s*\\g<T>)*\\s*>)?)\\s*(?:,\\s*\\g<T>)*\\s*>\\s*[\\(`])",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.typeparameters.begin.typescript"
@@ -294,7 +297,7 @@
     },
     "generic-call-eol": {
       "name": "meta.generic.typescript",
-      "begin": "(?<=[\\w$\\]\\)])(<)(?=\\s*(?<T>(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\s*<\\s*\\g<T>(?:\\s*,\\s*\\g<T>)*\\s*>)?)\\s*(?:,\\s*\\g<T>)*\\s*>\\s*$)",
+      "begin": "(?<=[\\w$\\]\\)])(<)(?=\\s*(?<T>(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\s*<\\s*\\g<T>(?:\\s*,\\s*\\g<T>)*\\s*>)?)\\s*(?:,\\s*\\g<T>)*\\s*>\\s*$)",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.typeparameters.begin.typescript"
@@ -337,7 +340,7 @@
           "include": "#generic-type"
         },
         {
-          "match": "(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*[,>])",
+          "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*[,>])",
           "name": "entity.name.type.typescript"
         },
         {
@@ -360,7 +363,7 @@
           "include": "#generic-type"
         },
         {
-          "match": "(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*[,>]|\\s*$)",
+          "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*[,>]|\\s*$)",
           "name": "entity.name.type.typescript"
         },
         {
@@ -374,7 +377,7 @@
     },
     "generic-type": {
       "name": "meta.type.generic.typescript",
-      "begin": "((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(<)",
+      "begin": "((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(<)",
       "beginCaptures": {
         "1": {
           "name": "entity.name.type.typescript"
@@ -396,12 +399,32 @@
       ]
     },
     "simple-type": {
-      "match": "(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
+      "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
       "name": "entity.name.type.typescript"
     },
     "comparison": {
       "match": "[<>]",
       "name": "keyword.operator.comparison.typescript"
+    },
+    "type-cast": {
+      "name": "meta.cast.expr.typescript",
+      "begin": "(?<![\\w$)\\]]\\s*)(<)(?=\\s*[[:alpha:]_$({\\[](?<TC>[\\w$.,\\[\\]\\s|&]*(?:<\\g<TC>>[\\w$.,\\[\\]\\s|&]*)*)>\\s*[[:alpha:][:digit:]_$\"`({\\[\\-])",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.typeparameters.begin.typescript"
+        }
+      },
+      "end": "(>)",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.typeparameters.end.typescript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#type-inner"
+        }
+      ]
     },
     "regex-literal": {
       "name": "string.regexp.typescript",
@@ -457,7 +480,7 @@
     },
     "ident": {
       "name": "variable.other.typescript",
-      "match": "(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*"
+      "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*"
     },
     "hexnumber": {
       "name": "constant.numeric.hex.typescript",
@@ -584,7 +607,7 @@
     },
     "type-object-member": {
       "name": "meta.type.annotation.member.typescript",
-      "begin": "(#?(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\??)(\\s*:)",
+      "begin": "(#?(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\??)(\\s*:)",
       "beginCaptures": {
         "1": {
           "name": "variable.object.property.typescript"
@@ -619,6 +642,9 @@
       },
       "patterns": [
         {
+          "include": "#method-signature"
+        },
+        {
           "include": "#type-object-member"
         },
         {
@@ -640,6 +666,21 @@
         },
         {
           "include": "#type-paren"
+        },
+        {
+          "include": "#shebang"
+        },
+        {
+          "include": "#jsdoc"
+        },
+        {
+          "include": "#tripleslash"
+        },
+        {
+          "include": "#linecomment"
+        },
+        {
+          "include": "#blockcomment"
         },
         {
           "include": "#scope-support-type-primitive"
@@ -763,7 +804,7 @@
     },
     "param-type-annotation": {
       "name": "meta.type.annotation.parameter.typescript",
-      "begin": "(\\.\\.\\.)?\\s*((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\??)(\\s*:)",
+      "begin": "(\\.\\.\\.)?\\s*((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\??)(\\s*:)",
       "beginCaptures": {
         "1": {
           "name": "keyword.operator.spread.typescript"
@@ -801,7 +842,7 @@
       ]
     },
     "declaration-param-name": {
-      "match": "(?<=[,(])\\s*(\\.\\.\\.)?\\s*((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*[,)=])",
+      "match": "(?<=[,(])\\s*(\\.\\.\\.)?\\s*((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*[,)=])",
       "captures": {
         "1": {
           "name": "keyword.operator.spread.typescript"
@@ -901,7 +942,7 @@
     },
     "function-declaration": {
       "name": "meta.function.typescript",
-      "begin": "\\b(function)\\s*(\\*)?\\s*((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "begin": "\\b(function)\\s*(\\*)?\\s*((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.function.typescript"
@@ -934,7 +975,7 @@
     },
     "class-declaration": {
       "name": "meta.class.typescript",
-      "begin": "\\b(class)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "begin": "\\b(class)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.class.typescript"
@@ -958,7 +999,7 @@
     },
     "interface-declaration": {
       "name": "meta.interface.typescript",
-      "begin": "\\b(interface)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "begin": "\\b(interface)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.interface.typescript"
@@ -997,7 +1038,7 @@
     },
     "type-declaration": {
       "name": "meta.type.typescript",
-      "begin": "\\b(type)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "begin": "\\b(type)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.type.typescript"
@@ -1017,11 +1058,11 @@
           "include": "$self"
         }
       ],
-      "while": "^\\s*(?:[<,\\[|&(...?:{;\\-.]|(?:is|keyof|typeof|readonly|abstract|new|asserts|extends|infer|true|false|null|undefined|void|this|unique|symbol|import)\\b|//|/\\*|(?!if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|export|from|let|const|var|using|function|constructor|class|interface|type|enum|namespace|module|public|private|protected|static|override|declare|async|accessor|get|set\\b)(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*\\b(?!\\s*[.(]))"
+      "while": "^(?=\\s*(?:[<,\\[|&(...?:{;\\-.]|(?:is|keyof|typeof|readonly|abstract|new|asserts|extends|infer|true|false|null|undefined|void|this|unique|symbol|import)\\b|//|/\\*|(?!if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|export|from|let|const|var|using|function|constructor|class|interface|type|enum|namespace|module|public|private|protected|static|override|declare|async|accessor|get|set\\b)(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*\\b(?!\\s*[.(])))"
     },
     "enum-declaration": {
       "name": "meta.enum.typescript",
-      "begin": "\\b(enum)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "begin": "\\b(enum)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.enum.typescript"
@@ -1042,7 +1083,7 @@
     },
     "namespace-declaration": {
       "name": "meta.namespace.typescript",
-      "begin": "\\b(namespace)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "begin": "\\b(namespace)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.namespace.typescript"
@@ -1063,7 +1104,7 @@
     },
     "module-declaration": {
       "name": "meta.module.typescript",
-      "begin": "\\b(module)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "begin": "\\b(module)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.namespace.typescript"
@@ -1090,7 +1131,7 @@
           "name": "storage.type.function.typescript"
         }
       },
-      "end": "(?<=\\})",
+      "end": "(?<=\\})|(?=[;}])",
       "patterns": [
         {
           "include": "#declaration-params"
@@ -1108,10 +1149,13 @@
     },
     "method-signature": {
       "name": "meta.method.typescript",
-      "begin": "\\b((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)\\s*(?=[<(])",
+      "begin": "\\b((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\?)?\\s*(?=[<(])",
       "beginCaptures": {
         "1": {
           "name": "entity.name.function.typescript"
+        },
+        "2": {
+          "name": "keyword.operator.optional.typescript"
         }
       },
       "end": "(?<=\\})|(?=[;\\}])",
@@ -1135,7 +1179,7 @@
     },
     "member-type-annotation": {
       "name": "meta.type.annotation.member.typescript",
-      "begin": "(#?(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\??)(\\s*:)",
+      "begin": "(#?(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\??)(\\s*:)",
       "beginCaptures": {
         "1": {
           "name": "variable.object.property.typescript"
@@ -1155,7 +1199,7 @@
       ]
     },
     "extends-definition": {
-      "match": "\\b(extends)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "match": "\\b(extends)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "captures": {
         "1": {
           "name": "keyword.other.extends.typescript"
@@ -1177,7 +1221,7 @@
       }
     },
     "function-call": {
-      "match": "((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*\\()",
+      "match": "((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*\\()",
       "captures": {
         "1": {
           "name": "entity.name.function.typescript"
@@ -1185,7 +1229,7 @@
       }
     },
     "object-method-key": {
-      "match": "((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*:\\s*(?:\\w+\\s+)?[\\(])",
+      "match": "((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*:\\s*(?:\\w+\\s+)?[\\(])",
       "captures": {
         "1": {
           "name": "entity.name.function.typescript"
@@ -1203,13 +1247,13 @@
       "end": "(?=[()}\\],=<;])",
       "patterns": [
         {
-          "match": "(?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
+          "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
           "name": "entity.name.function.typescript"
         }
       ]
     },
     "method-call": {
-      "match": "(?<=[\\w$\\]\\)])(\\.)\\s*((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*\\()",
+      "match": "(?<=[\\w$\\]\\)])(\\.)\\s*((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*\\()",
       "captures": {
         "1": {
           "name": "punctuation.accessor.typescript"
@@ -1231,7 +1275,7 @@
       }
     },
     "property-access": {
-      "match": "(?<=[\\w$\\]\\)])(\\.)\\s*((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
+      "match": "(?<=[\\w$\\]\\)])(\\.)\\s*((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)",
       "captures": {
         "1": {
           "name": "punctuation.accessor.typescript"
@@ -1242,7 +1286,7 @@
       }
     },
     "arrow-parameter": {
-      "match": "\\b((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)\\s*(?==>)",
+      "match": "\\b((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)\\s*(?==>)",
       "captures": {
         "1": {
           "name": "variable.parameter.typescript"
@@ -1268,7 +1312,7 @@
           "include": "#param-type-annotation"
         },
         {
-          "match": "(?<=[,(])\\s*(\\.\\.\\.)?\\s*((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*[,:)?=])",
+          "match": "(?<=[,(])\\s*(\\.\\.\\.)?\\s*((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(?=\\s*[,:)?=])",
           "captures": {
             "1": {
               "name": "keyword.operator.spread.typescript"
@@ -1401,7 +1445,7 @@
     },
     "type-annotation-var": {
       "name": "meta.type.annotation.typescript",
-      "begin": "\\b(let|const|var|using)\\s+((?:[a-zA-Z_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\s*:)",
+      "begin": "\\b(let|const|var|using)\\s+((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(\\s*:)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.typescript"
@@ -1512,7 +1556,7 @@
       "name": "keyword.control.flow.typescript"
     },
     "scope-storage-type-function": {
-      "match": "\\b(function|constructor)\\b",
+      "match": "\\b(function)\\b",
       "name": "storage.type.function.typescript"
     },
     "scope-storage-type-property": {

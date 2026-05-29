@@ -67,7 +67,7 @@ highlighter from its conformance-proven parser; the official one is hand-written
 
 ```
 TypeScript
-  Monogram  █████████████████░░░░░  78%  (38/49)
+  Monogram  ██████████████████░░░░  80%  (39/49)
   official  █████████░░░░░░░░░░░░░  39%  (19/49)
 JavaScript
   pending — JS not yet on the neutral-oracle bench (see ROADMAP)
@@ -76,7 +76,7 @@ JavaScript
 <sub>TypeScript = 49 oracle-adjudicable open [`microsoft/TypeScript-TmLanguage`](https://github.com/microsoft/TypeScript-TmLanguage/issues) issues ([`test/issue-cases.ts`](test/issue-cases.ts)) — 21 of Monogram's wins are fixes the official grammar gets *structurally* wrong. Per-issue breakdown: `node test/highlight-bench.ts`. Regenerate: `npm run bench:readme`.</sub>
 <!-- bench:end -->
 
-> **The other side of the ledger (honesty check).** On the *broad* TS parser-conformance corpus — not just the documented bugs — raw token-role accuracy flips: the official grammar's decade of hardening leads (~99% vs ~96%). Monogram's gap there is specific backlog (Unicode identifiers, qualified type names), **not** the ambiguity class above. Clone the TS corpus to `/tmp/ts-repo` and run `node test/highlight-bench.ts` to see both corpora.
+> **The other side of the ledger (honesty check).** On the *broad* TS parser-conformance corpus — not just the documented bugs — the two are now neck-and-neck: token-role accuracy is **tied at ~99%**, and Monogram leads on per-cell coverage (100% of strict cells vs official's ~97%). The official grammar still edges ahead on whole-file-perfect snippets (~89% vs ~83%); the residual is Monogram's remaining qualified-type-name backlog, **not** the ambiguity class above. Clone the TS corpus to `/tmp/ts-repo` and run `node test/highlight-bench.ts` to see both corpora.
 
 ## What you get
 
