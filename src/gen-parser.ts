@@ -240,6 +240,15 @@ export function createParser(grammar: CstGrammar) {
   // binary/ternary `… in $` / `? $ : $`) AND whose connector is a punctuator, not a
   // word-operator — so `as`/`satisfies`/`in`/`instanceof`/`?:` still bind after `a++`.
   const accessTailLeds = new Set<object>();
+  // ── Tail-closing LEDs (a LED that itself closes the access tail) ──
+  // A LED ending in a zero-width *negative lookahead* (`… not($)`) asserts that
+  // nothing may follow it, so its result cannot be the base of any further
+  // member/element/call access — once it binds, the access tail is closed (no `.x`,
+  // `[i]`, `(…)`, `<T>`, tagged template). Language-agnostic / structural: keyed on
+  // the LED ending in a `not` assertion, with no knowledge of what it guards. (E.g.
+  // a bare type-argument instantiation `Foo<T>` — written `… '>' not($)` — which TS
+  // forbids from being followed by property access, TS1477.)
+  const tailClosingLeds = new Set<object>();
   for (const [ruleName, { leds }] of prattClassified.entries()) {
     for (const led of leds) {
       const it = led.items;
@@ -249,6 +258,7 @@ export function createParser(grammar: CstGrammar) {
       const lastIsOperand = selfRefName(last, ruleName);                // open binary/ternary operand
       const wordConnector = it[0].type === 'literal' && /^[A-Za-z]/.test(it[0].value);
       if (!lastIsOperand && !wordConnector) accessTailLeds.add(led);
+      if (last.type === 'not') tailClosingLeds.add(led);
     }
   }
 
@@ -673,6 +683,9 @@ export function createParser(grammar: CstGrammar) {
               offset: lhs.offset,
               end: children.length > 0 ? childEnd(children[children.length - 1]) : lhs.end,
             };
+            // A LED ending in a negative lookahead (e.g. a bare instantiation
+            // `Foo<T>`) closes the access tail: nothing may chain off it.
+            if (tailClosingLeds.has(led)) tailClosed = true;
             matched = true;
             break;
           }

@@ -48,7 +48,8 @@ Expr {
     kw_this |
     kw_super |
     Spread Expr |
-    Expr AngleL (Type (Comma Type)*)? AngleR (ParenL (Expr (Comma Expr)*)? ParenR | Template | ) |
+    Expr AngleL (Type (Comma Type)*)? AngleR (ParenL (Expr (Comma Expr)*)? ParenR | Template) |
+    Expr AngleL (Type (Comma Type)*)? AngleR |
     Expr ParenL (Expr (Comma Expr)*)? ParenR |
     Expr Dot (Ident | PrivateField) |
     Expr QuestionDot (Ident | PrivateField | ParenL (Expr (Comma Expr)*)? ParenR | BracketL Expr BracketR | Template) |

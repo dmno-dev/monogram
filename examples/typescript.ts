@@ -188,11 +188,18 @@ const Expr = rule($ => [
   [prefix, $],
   [$, postfix],
   ['...', $],
-  // instantiation / typed call / tagged template: f<T> | f<T>(…) | f<T>`…`
-  // A bare instantiation `f<T>` (no call/tag) only when the next token can't
-  // start an expression — otherwise `<`/`>` were comparisons (`f < a, b > 7`):
-  // the same disambiguation TS makes via canFollowTypeArgumentsInExpression.
-  [$, '<', sep(Type, ','), '>', alt(['(', sep($, ','), ')'], Template, not(Expr))],
+  // typed call / tagged template: f<T>(…) | f<T>`…` — a call/tag may itself be
+  // continued by member access (`f<T>().x`), so this is an ordinary access tail.
+  [$, '<', sep(Type, ','), '>', alt(['(', sep($, ','), ')'], Template)],
+  // bare instantiation `f<T>` (no call/tag): allowed only when the next token
+  // can't start an expression — otherwise `<`/`>` were comparisons (`f < a, b > 7`),
+  // the disambiguation TS makes via canFollowTypeArgumentsInExpression. Ending in a
+  // negative lookahead, this LED closes the access tail (it asserts nothing follows),
+  // so a `.`/`?.` property access can't chain off it: `Foo<T>.Bar` is rejected
+  // (TS1477 — a bare instantiation is not a valid base for property access). A `[`,
+  // `(`, or `` ` `` continuation still reparses the `<…>` as comparisons (those start
+  // an expression, so `not($)` fails the bare arm), matching TS.
+  [$, '<', sep(Type, ','), '>', not(Expr)],
   [$, '(', sep($, ','), ')'],
   [$, '.', alt(Ident, PrivateField)],
   // optional chaining: ?.x | ?.#x | ?.(args) | ?.[i] | ?.`…`
