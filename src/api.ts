@@ -16,6 +16,7 @@ interface TokenOptions {
     divisionAfterTexts?: string[];
     regexAfterTexts?: string[];
   };
+  string?: boolean;
 }
 
 export class TokenRef {
@@ -284,6 +285,7 @@ export function defineGrammar(config: GrammarConfig): CstGrammar & { name: strin
         divisionAfterTexts: tok.opts.regexContext.divisionAfterTexts ?? [],
         regexAfterTexts: tok.opts.regexContext.regexAfterTexts ?? [],
       },
+      string: tok.opts.string,
     };
   });
 

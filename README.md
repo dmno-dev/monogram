@@ -23,6 +23,7 @@ From one grammar definition (a small TypeScript combinator API):
 - **A lexer** — tokenizes source straight from the grammar's token definitions; usable on its own (`createLexer(grammar).tokenize`).
 - **A CST parser** — recursive descent + Pratt operator precedence on top of the lexer, producing a full-fidelity concrete syntax tree where every token is a node.
 - **A TextMate grammar** — a `.tmLanguage.json` for editor syntax highlighting, derived from the same rules.
+- **A VS Code language configuration** — a `language-configuration.json` (comments, bracket pairs, auto-closing/surrounding pairs, folding, indentation) for editor behavior.
 
 ## Results
 
@@ -143,20 +144,22 @@ Matching the official grammar *exactly* would, in cases like `transform`, make t
 ## Architecture
 
 ```
-examples/typescript.ts            one grammar (TypeScript combinator API)
+examples/typescript.ts                one grammar (TypeScript combinator API)
         │
-        ├─ src/gen-lexer.ts  ───▶ lexer → tokens        (standalone: createLexer)
+        ├─ src/gen-lexer.ts  ───────▶ lexer → tokens        (standalone: createLexer)
         │        ▲ composed by
-        ├─ src/gen-parser.ts ───▶ CST parser   (recursive descent + Pratt + packrat memo;
-        │                         run against the conformance suite = the grammar's proof)
+        ├─ src/gen-parser.ts ───────▶ CST parser   (recursive descent + Pratt + packrat memo;
+        │                             run against the conformance suite = the grammar's proof)
         │
-        └─ src/gen-tm.ts ───────▶ typescript.tmLanguage.json   (TextMate highlighter)
+        ├─ src/gen-tm.ts ───────────▶ typescript.tmLanguage.json            (TextMate highlighter)
+        │
+        └─ src/gen-vscode-config.ts ▶ typescript.language-configuration.json (editor behavior)
 
-shared  src/grammar-utils.ts      structural helpers used across stages
-        src/api.ts, types.ts      the grammar's combinator + type surface
+shared  src/grammar-utils.ts          structural helpers used across stages
+        src/api.ts, types.ts          the grammar's combinator + type surface
 ```
 
-- **One grammar, three derived stages.** `gen-lexer` builds a tokenizer from the token definitions + lexer hints; `gen-parser` composes that lexer and interprets the rules to build a CST; `gen-tm` reads the same rule *shapes* to derive TextMate patterns. Shared structural primitives (`grammar-utils.ts`) — e.g. one keyword/punctuation predicate — keep them classifying tokens identically.
+- **One grammar, many derived artifacts.** `gen-lexer` builds a tokenizer from the token definitions + lexer hints; `gen-parser` composes that lexer and interprets the rules to build a CST; `gen-tm` reads the same rule *shapes* to derive TextMate patterns; `gen-vscode-config` derives the editor config (comments, brackets, auto-close) from the same tokens and `scopes`. Shared structural primitives (`grammar-utils.ts`) — e.g. one keyword/punctuation predicate — keep them consistent.
 - **CST, not AST.** The parser keeps every token (punctuation, keywords) as a node — required for the highlighter and for lossless source reconstruction. Roughly 2× the nodes of an AST, by design.
 - **Every stage is language-agnostic.** All language specifics live in the grammar; lexer, parser and generator are generic, reusable runtimes.
 

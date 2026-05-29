@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { generateTmLanguage } from './gen-tm.ts';
+import { generateLanguageConfig } from './gen-vscode-config.ts';
 import type { CstGrammar, RuleExpr } from './types.ts';
 
 const file = process.argv[2];
@@ -45,6 +46,12 @@ const tm = generateTmLanguage(grammar, langName);
 const outPath = join(dirname(file), `${langName}.tmLanguage.json`);
 writeFileSync(outPath, JSON.stringify(tm, null, 2) + '\n');
 console.log(`\n→ Generated ${outPath}`);
+
+// Generate VS Code language configuration (editor behaviors)
+const langConfig = generateLanguageConfig(grammar);
+const cfgPath = join(dirname(file), `${langName}.language-configuration.json`);
+writeFileSync(cfgPath, JSON.stringify(langConfig, null, 2) + '\n');
+console.log(`→ Generated ${cfgPath}`);
 
 function formatExpr(expr: RuleExpr): string {
   switch (expr.type) {

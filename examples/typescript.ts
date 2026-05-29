@@ -14,6 +14,7 @@ const BinaryNumber = token(/0[bB][01]+(_[01]+)*/,                            { s
 const BigInt_      = token(/[0-9]+(_[0-9]+)*n/,                              { scope: 'constant.numeric.bigint' });
 const Number_      = token(/[0-9]+(_[0-9]+)*(?:\.[0-9]*(_[0-9]+)*)?(?:[eE][+-]?[0-9]+)?/);
 const String_      = token(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'/, {
+  string: true,
   escape: /\\(?:[nrtbfv0'"\\]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F]+\})/,
 });
 const Template     = token(/`(?:[^`\\$]|\\.|\$(?!\{))*`/, {

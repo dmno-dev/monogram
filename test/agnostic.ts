@@ -4,6 +4,7 @@
 // these assertions would fail.
 import { token, rule, defineGrammar, alt, many } from '../src/api.ts';
 import { createParser } from '../src/gen-parser.ts';
+import { generateLanguageConfig } from '../src/gen-vscode-config.ts';
 
 const Word = token(/[a-z]+/, { identifier: true });   // identifier token, ASCII-only on purpose, NOT named "Ident"
 const Num = token(/[0-9]+/);
@@ -31,6 +32,15 @@ check('template machinery gated off when undeclared', !backtickHandled);
 
 // 4. The whole thing parses end-to-end on the shared engine.
 check('parses on the shared engine', parse('foo + 12 + bar').kind === 'node');
+
+// 5. gen-vscode-config derives string delimiters from the `string` flag, not a
+//    hardcoded JS quote set: a `~…~` string token must yield `~` (and never `"`).
+const Str = token(/~[^~]*~/, { string: true });
+const StrProg = rule(() => [Word, Str]);
+const gc = defineGrammar({ name: 'mini2', tokens: { Word, Str }, rules: { StrProg }, entry: StrProg });
+const cfg = generateLanguageConfig(gc);
+check('language-config quotes derived from grammar (~, not hardcoded \")',
+  !!cfg.surroundingPairs?.some(p => p[0] === '~') && !cfg.surroundingPairs?.some(p => p[0] === '"'));
 
 console.log(fail === 0 ? `\n${ok}/${ok} agnosticism checks pass — engine has no TS-specific token assumptions` : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);

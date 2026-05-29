@@ -10,6 +10,7 @@ export interface TokenDecl {
                                  // Unicode-identifier fallback and regex division-after context.
   template?: TemplateDelimiters; // a template-literal token: engine tokenizes interpolation holes.
   regexContext?: RegexContext;   // a `regex`-flagged token: when `/` is a regex vs division.
+  string?: boolean;              // a string-literal token: its delimiters drive editor auto-close/surround.
 }
 
 /** Delimiters an interpolated template literal is made of (e.g. JS: `` ` ``, `${`, `}`). */

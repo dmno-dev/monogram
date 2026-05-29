@@ -26,10 +26,10 @@ jobs:
 
       # Regenerate the TextMate grammar and fail if it drifts from the committed file
       # (i.e. someone edited the grammar but forgot to regenerate).
-      - name: Generate highlighter (must be in sync)
+      - name: Generate editor artifacts (must be in sync)
         run: |
           node src/cli.ts examples/typescript.ts
-          git diff --exit-code -- examples/typescript.tmLanguage.json
+          git diff --exit-code -- examples/typescript.tmLanguage.json examples/typescript.language-configuration.json
 
       # Self-contained suites (each exits non-zero on failure). The conformance /
       # coverage / bench tools are excluded here: they need the external TypeScript
