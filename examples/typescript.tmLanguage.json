@@ -434,23 +434,23 @@
     },
     "hexnumber": {
       "name": "constant.numeric.hex.typescript",
-      "match": "0[xX][0-9a-fA-F]+(_[0-9a-fA-F]+)*"
+      "match": "0[xX][0-9a-fA-F]+(_[0-9a-fA-F]+)*(?![0-9A-Za-z_$\\\\])"
     },
     "octalnumber": {
       "name": "constant.numeric.octal.typescript",
-      "match": "0[oO][0-7]+(_[0-7]+)*"
+      "match": "0[oO][0-7]+(_[0-7]+)*(?![0-9A-Za-z_$\\\\])"
     },
     "binarynumber": {
       "name": "constant.numeric.binary.typescript",
-      "match": "0[bB][01]+(_[01]+)*"
+      "match": "0[bB][01]+(_[01]+)*(?![0-9A-Za-z_$\\\\])"
     },
     "bigint": {
       "name": "constant.numeric.bigint.typescript",
-      "match": "[0-9]+(_[0-9]+)*n"
+      "match": "[0-9]+(_[0-9]+)*n(?![0-9A-Za-z_$\\\\])"
     },
     "number": {
       "name": "constant.numeric.float.typescript",
-      "match": "[0-9]+(_[0-9]+)*(?:\\.[0-9]*(_[0-9]+)*)?(?:[eE][+-]?[0-9]+)?"
+      "match": "[0-9]+(_[0-9]+)*(?:\\.[0-9]*(_[0-9]+)*)?(?:[eE][+-]?[0-9]+(_[0-9]+)*)?(?![0-9A-Za-z_$\\\\])"
     },
     "string-double": {
       "name": "string.quoted.double.typescript",

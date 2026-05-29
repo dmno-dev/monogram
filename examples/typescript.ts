@@ -8,11 +8,18 @@ import {
 // ── Tokens ──
 
 const Ident        = token(/(?:[a-zA-Z_$]|\\u[0-9a-fA-F]{4}|\\u\{[0-9a-fA-F]+\})(?:[a-zA-Z0-9_$]|\\u[0-9a-fA-F]{4}|\\u\{[0-9a-fA-F]+\})*/, { identifier: true });
-const HexNumber    = token(/0[xX][0-9a-fA-F]+(_[0-9a-fA-F]+)*/,            { scope: 'constant.numeric.hex' });
-const OctalNumber  = token(/0[oO][0-7]+(_[0-7]+)*/,                         { scope: 'constant.numeric.octal' });
-const BinaryNumber = token(/0[bB][01]+(_[01]+)*/,                            { scope: 'constant.numeric.binary' });
-const BigInt_      = token(/[0-9]+(_[0-9]+)*n/,                              { scope: 'constant.numeric.bigint' });
-const Number_      = token(/[0-9]+(_[0-9]+)*(?:\.[0-9]*(_[0-9]+)*)?(?:[eE][+-]?[0-9]+)?/);
+// Numeric tokens end with `(?![0-9A-Za-z_$\\])`: the spec rule that a numeric literal
+// may not be immediately followed by an IdentifierStart or DecimalDigit. Without it,
+// `0b2`/`0B1102110`/`0o81010` would munch a valid prefix (`0b1`, `0B110`) and leave the
+// rest as a second token, so the file parses as two statements instead of being rejected.
+// With it the bad literal matches no token and the lexer throws — the correct rejection.
+// (ASCII IdentifierStart + `\` for `\u`-escapes; the lexer compiles patterns without the
+// /u flag so \p{L} is unavailable, and every affected conformance case is ASCII.)
+const HexNumber    = token(/0[xX][0-9a-fA-F]+(_[0-9a-fA-F]+)*(?![0-9A-Za-z_$\\])/,            { scope: 'constant.numeric.hex' });
+const OctalNumber  = token(/0[oO][0-7]+(_[0-7]+)*(?![0-9A-Za-z_$\\])/,                         { scope: 'constant.numeric.octal' });
+const BinaryNumber = token(/0[bB][01]+(_[01]+)*(?![0-9A-Za-z_$\\])/,                            { scope: 'constant.numeric.binary' });
+const BigInt_      = token(/[0-9]+(_[0-9]+)*n(?![0-9A-Za-z_$\\])/,                              { scope: 'constant.numeric.bigint' });
+const Number_      = token(/[0-9]+(_[0-9]+)*(?:\.[0-9]*(_[0-9]+)*)?(?:[eE][+-]?[0-9]+(_[0-9]+)*)?(?![0-9A-Za-z_$\\])/);
 const String_      = token(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'/, {
   string: true,
   escape: /\\(?:[nrtbfv0'"\\]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|u\{[0-9a-fA-F]+\})/,
