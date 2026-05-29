@@ -94,7 +94,10 @@ const Type = rule($ => {
     ['(', $, ')'],
     fnType,                          // function type
     [opt('abstract'), 'new', ...fnType],  // constructor type (= `new` + function type)
-    ['[', many(opt('...'), opt(Ident, opt('?'), ':'), $, opt('?'), opt(',')), ']'],
+    // tuple element: `...`? (name `?`? `:`)? `...`? Type `?`?  — the second `...`
+    // covers a named rest member `n: ...T[]` (TS: RestType after the label); the
+    // trailing `?` covers optional members `n: T?` / `T?` (TS: OptionalType).
+    ['[', many(opt('...'), opt(Ident, opt('?'), ':'), opt('...'), $, opt('?'), opt(',')), ']'],
     ['{', many(TypeMember, opt(alt(';', ','))), '}'],
     ['asserts', Ident, opt('is', $)],
     [$, 'extends', $, '?', $, ':', $],
@@ -316,15 +319,18 @@ const InterfaceMember = rule($ => {
     [opt('new'), ...callSig],
     // getter / setter (`get`/`set` as a member NAME falls through to the named branch)
     [alt('get', 'set'), MemberName, '(', sep(Param, ','), ')', opt(':', Type)],
-    // index signature | mapped type — share `static? (+/-)? readonly? [ Ident`, branch on `in` vs `:`
-    [opt('static'), opt(alt('+', '-')), opt('readonly'), '[', Ident, alt(
-      ['in', Type, opt('as', Type), ']', opt(alt('+', '-')), opt('?'), ':', Type],  // mapped: K in T (as U)?
-      [':', Type, ']', opt(':', Type)],                                             // index:  k: T
-    )],
-    // readonly property (readonly index sig is the bracketed branch above)
+    // mapped type: static? (+/-)? readonly? [ K in T (as U)? ] (+/-)? ?? : T
+    [opt('static'), opt(alt('+', '-')), opt('readonly'), '[', Ident, 'in', Type, opt('as', Type), ']', opt(alt('+', '-')), opt('?'), ':', Type],
+    // readonly property (readonly index sig is the bracketed branch below)
     ['readonly', MemberName, opt('?'), ':', Type],
-    // named / computed member (MemberName includes `[Expr]`) — branch property | method
+    // named / computed member (MemberName includes `[Expr]`) — branch property | method.
+    // Placed before the index signature so a bare `[expr]` parses as a computed
+    // property (TS: `[p]` is a computed property, not an indexer).
     [MemberName, opt('?'), propOrMethod],
+    // index signature: static? readonly? [ Param,* ] (: T)?  — TS parses the brackets
+    // as a full parameter list, so `[]`, `[a?]`, `[public a]`, `[a: T, b: U]` all parse
+    // (the extra forms are grammar-errors TS reports post-parse, but the parser accepts).
+    [opt('static'), opt('readonly'), '[', sep(Param, ','), ']', opt(':', Type)],
   ];
 });
 

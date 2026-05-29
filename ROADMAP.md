@@ -1,5 +1,22 @@
 # Monogram — Roadmap
 
+## Generation targets (one grammar → every ecosystem)
+
+All emitted by `node src/cli.ts examples/typescript.ts`. Highlighting for every target is derived from one structural inference (`gen-tm`), retargeted per format.
+
+| Target | Artifact | Status |
+|---|---|---|
+| lexer | `createLexer` → tokens | ✅ |
+| CST parser | `createParser` → CST | ✅ 94.9% conformance (3584/3776) |
+| TextMate | `.tmLanguage.json` | ✅ 99.3% vs VS Code |
+| VS Code language-config | `.language-configuration.json` | ✅ comments/folding/`/**` match official |
+| tree-sitter | `grammar.js` + `queries/highlights.scm` + `scanner.c` | 🟡 first pass — external C scanner is a scaffold |
+| Lezer | grammar + `styleTags` + JS tokenizer | 🟡 first pass — Pratt→precedence may need hand-tuning |
+| Monarch | Monaco tokenizer JSON | 🟡 first pass — JS-regex bounded (still beats Monaco's capitalization heuristic) |
+| CST node types | TS discriminated union | 🟡 structural — named-field accessors need grammar field labels |
+
+Remaining: finish the tree-sitter C scanner; hand-tune Lezer operator precedence; (optional) add field labels to the grammar DSL for richer AST types.
+
 ## Current State (v2.5)
 
 **Authoring format**: TypeScript API (`token()`, `rule()`, `defineGrammar()`)

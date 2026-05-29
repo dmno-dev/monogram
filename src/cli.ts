@@ -1,7 +1,11 @@
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { generateTmLanguage } from './gen-tm.ts';
 import { generateLanguageConfig } from './gen-vscode-config.ts';
+import { generateTreeSitter } from './gen-treesitter.ts';
+import { generateLezer } from './gen-lezer.ts';
+import { generateMonarch } from './gen-monarch.ts';
+import { generateAstTypes } from './gen-ast-types.ts';
 import type { CstGrammar, RuleExpr } from './types.ts';
 
 const file = process.argv[2];
@@ -52,6 +56,32 @@ const langConfig = generateLanguageConfig(grammar);
 const cfgPath = join(dirname(file), `${langName}.language-configuration.json`);
 writeFileSync(cfgPath, JSON.stringify(langConfig, null, 2) + '\n');
 console.log(`→ Generated ${cfgPath}`);
+
+// ── Parser-ecosystem + type targets (one grammar → every ecosystem) ──
+const emit = (rel: string, content: string) => {
+  const full = join(dirname(file), rel);
+  mkdirSync(dirname(full), { recursive: true });
+  writeFileSync(full, content.endsWith('\n') ? content : content + '\n');
+  console.log(`→ Generated ${full}`);
+};
+
+// tree-sitter: grammar.js + highlight queries + external scanner scaffold
+const treeSitter = generateTreeSitter(grammar, langName);
+emit('tree-sitter/grammar.js', treeSitter.grammarJs);
+emit('tree-sitter/queries/highlights.scm', treeSitter.highlightsScm);
+emit('tree-sitter/src/scanner.c', treeSitter.scannerC);
+
+// Lezer (CodeMirror 6): grammar + styleTags + external tokenizer
+const lezer = generateLezer(grammar);
+emit(`lezer/${langName}.grammar`, lezer.grammar);
+emit('lezer/highlight.js', lezer.styleTags);
+emit('lezer/tokens.js', lezer.externalTokenizer);
+
+// Monaco Monarch tokenizer
+emit(`${langName}.monarch.json`, JSON.stringify(generateMonarch(grammar), null, 2));
+
+// CST node types (TypeScript)
+emit(`${langName}.cst-types.ts`, generateAstTypes(grammar));
 
 function formatExpr(expr: RuleExpr): string {
   switch (expr.type) {

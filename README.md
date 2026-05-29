@@ -25,6 +25,13 @@ From one grammar definition (a small TypeScript combinator API):
 - **A TextMate grammar** — a `.tmLanguage.json` for editor syntax highlighting, derived from the same rules.
 - **A VS Code language configuration** — a `language-configuration.json` (comments, bracket pairs, auto-closing/surrounding pairs, folding, indentation) for editor behavior.
 
+And — from the same grammar — first-pass generators for the rest of the editor ecosystem (validated structurally; some parts are scaffolds):
+
+- **tree-sitter** — `grammar.js` + `queries/highlights.scm` + an external-scanner scaffold (Neovim / Helix / Zed / GitHub).
+- **Lezer** — a CodeMirror 6 grammar + `styleTags` + a JS external tokenizer.
+- **Monarch** — a Monaco (web) tokenizer.
+- **CST node types** — TypeScript types (a discriminated union keyed by rule) for typed tree consumers.
+
 ## Results
 
 Validated on TypeScript (grammar: [`examples/typescript.ts`](examples/typescript.ts), 521 lines):
@@ -152,12 +159,17 @@ examples/typescript.ts                one grammar (TypeScript combinator API)
         │                             run against the conformance suite = the grammar's proof)
         │
         ├─ src/gen-tm.ts ───────────▶ typescript.tmLanguage.json            (TextMate highlighter)
-        │
-        └─ src/gen-vscode-config.ts ▶ typescript.language-configuration.json (editor behavior)
+        ├─ src/gen-vscode-config.ts ▶ typescript.language-configuration.json (editor behavior)
+        ├─ src/gen-treesitter.ts ───▶ tree-sitter/  (grammar.js + highlights.scm + scanner.c)
+        ├─ src/gen-lezer.ts ────────▶ lezer/        (grammar + styleTags + tokenizer)
+        ├─ src/gen-monarch.ts ──────▶ typescript.monarch.json
+        └─ src/gen-ast-types.ts ────▶ typescript.cst-types.ts
 
 shared  src/grammar-utils.ts          structural helpers used across stages
         src/api.ts, types.ts          the grammar's combinator + type surface
 ```
+
+Every highlighter target (TextMate, tree-sitter queries, Lezer styleTags, Monarch) is produced by the *same* structural scope-inference (`gen-tm`), retargeted per format — so highlighting stays consistent across ecosystems.
 
 - **One grammar, many derived artifacts.** `gen-lexer` builds a tokenizer from the token definitions + lexer hints; `gen-parser` composes that lexer and interprets the rules to build a CST; `gen-tm` reads the same rule *shapes* to derive TextMate patterns; `gen-vscode-config` derives the editor config (comments, brackets, auto-close) from the same tokens and `scopes`. Shared structural primitives (`grammar-utils.ts`) — e.g. one keyword/punctuation predicate — keep them consistent.
 - **CST, not AST.** The parser keeps every token (punctuation, keywords) as a node — required for the highlighter and for lossless source reconstruction. Roughly 2× the nodes of an AST, by design.
