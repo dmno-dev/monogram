@@ -8,7 +8,7 @@ All emitted by `node src/cli.ts examples/typescript.ts`. Highlighting for every 
 |---|---|---|
 | lexer | `createLexer` → tokens | ✅ |
 | CST parser | `createParser` → CST | ✅ 94.9% conformance (3584/3776) |
-| TextMate | `.tmLanguage.json` | ✅ 99.3% vs VS Code |
+| TextMate | `.tmLanguage.json` | ✅ more correct than VS Code on its own bug ledger (`test/highlight-bench.ts`) |
 | VS Code language-config | `.language-configuration.json` | ✅ comments/folding/`/**` match official |
 | tree-sitter | `grammar.js` + `queries/highlights.scm` + `scanner.c` | 🟡 first pass — external C scanner is a scaffold |
 | Lezer | grammar + `styleTags` + JS tokenizer | 🟡 first pass — Pratt→precedence may need hand-tuning |

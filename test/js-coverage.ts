@@ -1,7 +1,11 @@
-// JavaScript highlighter visual-accuracy gate, mirroring test/coverage.ts.
+// JavaScript highlighter visual-accuracy gate (agreement with the official JS grammar).
+// NOTE: this is the JS-side counterpart of the now-removed TS test/coverage.ts — a
+// RELATIVE metric (agreement with the incumbent), not absolute correctness. The TS
+// highlighter moved to test/highlight-bench.ts (neutral tsc oracle); porting this JS
+// gate to that model is future work once the bench gains a JS oracle.
 //
 // It scores the GENERATED examples/javascript.tmLanguage.json against VS Code's
-// OFFICIAL JavaScript grammar (the sibling of the TS one used by coverage.ts):
+// OFFICIAL JavaScript grammar:
 //   /Applications/Visual Studio Code.app/.../extensions/javascript/syntaxes/JavaScript.tmLanguage.json
 //
 // The official grammar declares scopeName "source.js"; the generated one

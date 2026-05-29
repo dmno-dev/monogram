@@ -4,7 +4,7 @@ Write a language's grammar **once**. Monogram runs that single definition as a r
 
 > *mono + grammar — one grammar definition, many derived artifacts.*
 
-**Status:** an active research project with **two languages on one shared core**. TypeScript ([`examples/typescript.ts`](examples/typescript.ts)) is mature — 100% valid-code coverage, 97.8% bidirectional, 99.3% highlighter (see [Results](#results)). JavaScript ([`examples/javascript.ts`](examples/javascript.ts)) is newer: it parses real-world JS and is the standalone ECMAScript base that the TypeScript grammar extends — but it does not yet have TypeScript-level conformance or highlighter-coverage validation. The engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
+**Status:** an active research project with **two languages on one shared core**. TypeScript ([`examples/typescript.ts`](examples/typescript.ts)) is mature — 100% valid-code coverage, 97.8% bidirectional, and a highlighter graded *absolutely* against a neutral oracle (more correct than the official grammar on its own bug ledger; see [Results](#results)). JavaScript ([`examples/javascript.ts`](examples/javascript.ts)) is newer: it parses real-world JS and is the standalone ECMAScript base that the TypeScript grammar extends — but it does not yet have TypeScript-level conformance or highlighter-coverage validation. The engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
 
 ## Quick start
 
@@ -35,7 +35,7 @@ Take `typeof x < y`. A regex highlighter has to guess whether `<` opens a generi
 
 The remaining 2.2% bidirectional gap is **over-acceptance** — the grammar is still too permissive on some *invalid* inputs (valid-code coverage is already 100%; nothing valid is missed). Most of what's left is code `tsc`'s parser rejects via *context-sensitive* rules a context-free grammar can't express — reserved-word placement, modifier combinations like `default abstract class`, `super` type-arguments — the kind of constraint a highlighter grammar was never meant to enforce. We push as close to 100% both ways as a pure grammar can; that's the asymptote, and the highlighter rides down to it for free.
 
-That's the categorical part: a highlighter derived from a parser-proven grammar isn't *a better hand-written grammar* — it's playing a different game. You can't out-regex it, because its correctness comes from a dimension hand-written grammars never operate in. The evidence is concrete — [`test/test-issues.ts`](test/test-issues.ts) replays **50 real bugs** from the official grammar's issue tracker (the `typeof x < y` ambiguities, regex-after-keyword cases, `as`-casts inside `<>`, nested `>>`), all **313** token checks pass, and **all 50 are still open upstream** — Monogram already fixes ~47% of the 106 open official issues, because those failure modes are *structurally precluded* by a parser rather than patched one regex at a time. The [**upstream issue ledger**](docs/upstream-issues.md) tracks exactly which issues we solve and gives an honest verdict on each one we don't (backlog / out-of-scope / needs-semantics / proven-TM-impossible).
+That's the categorical part: a highlighter derived from a parser-proven grammar isn't *a better hand-written grammar* — it's playing a different game. You can't out-regex it, because its correctness comes from a dimension hand-written grammars never operate in. The evidence is concrete — [`test/test-issues.ts`](test/test-issues.ts) replays **50 real bugs** from the official grammar's issue tracker (the `typeof x < y` ambiguities, regex-after-keyword cases, `as`-casts inside `<>`, nested `>>`), all **318** token checks pass, and **all 50 are still open upstream** — ~47% of the 106 open official issues. A separate *neutral-oracle* bench ([`test/highlight-bench.ts`](test/highlight-bench.ts)) then re-grades *both* grammars against `tsc` and independently confirms a large subset as objective fixes — official structurally wrong, Monogram right (see the [auto-generated head-to-head](#head-to-head-highlighter-correctness-vs-the-official-grammar)) — because those failure modes are *structurally precluded* by a parser rather than patched one regex at a time. The [**upstream issue ledger**](docs/upstream-issues.md) tracks exactly which issues we solve and gives an honest verdict on each one we don't (backlog / out-of-scope / needs-semantics / proven-TM-impossible).
 
 ## Results
 
@@ -44,15 +44,44 @@ Measured against the TypeScript compiler's own conformance suite (single-file ca
 ```
 Valid-code coverage  100%    3376 / 3376 valid single-file cases parse        (zero gaps; no valid code missed)
 Bidirectional        97.8%   3585 / 3664 — also rejects what tsc rejects      (gap = over-acceptance only)
-Highlighter          99.3%   589 / 593 tokens match VS Code's official grammar
-Official-grammar bugs  50    real TypeScript-TmLanguage issues replayed (313 token checks) — all pass
+Highlighter          graded absolutely vs a neutral tsc oracle — see Head-to-head below (auto-generated)
+Official-grammar bugs  50    issues replayed (318 checks pass); 21 independently re-verified vs tsc — all still open upstream
 Source size          628 lines — 5× fewer than the official 3331-line hand-written TextMate YAML
 Engine               language-agnostic — zero TypeScript-specific code (proven by test/agnostic.ts)
 ```
 
 Read the last two lines together — that's the whole argument. **One 628-line grammar replaces the official 3331-line hand-written TextMate YAML at a fifth the line count** *and* throws in a conformance-proven parser the official grammar never had. **Less to maintain, and demonstrably more correct.**
 
-The valid-code/bidirectional numbers are the grammar's correctness proof; the 99.3% highlighter accuracy is what that proof buys you — and the four remaining token differences are deliberate (see [Known differences](#known-differences-from-the-official-highlighter)).
+The valid-code/bidirectional numbers are the grammar's correctness proof; the highlighter correctness that proof buys is measured *absolutely* below — Monogram comes out **more correct than the official grammar on its own documented bug ledger**, not merely a faithful copy of it. (A few scope differences from official are deliberate — see [Known differences](#known-differences-from-the-official-highlighter).)
+
+### Head-to-head: highlighter correctness vs the official grammar
+
+The numbers below are **auto-generated** by [`test/highlight-bench.ts`](test/highlight-bench.ts) — it grades *both* the official TextMate grammar and Monogram's against a neutral `tsc` oracle, so the comparison is absolute (each has a real distance from 100%), not relative.
+
+<!-- bench:start -->
+<!-- generated by `node test/highlight-bench.ts --write-readme` — do not edit by hand -->
+
+Both grammars are graded against a neutral **`tsc`** oracle (the parser only — never
+Monogram's own output, never the official grammar). Ceiling is 100%.
+
+**On the documented official-grammar bug ledger** — the 49 [`microsoft/TypeScript-TmLanguage`](https://github.com/microsoft/TypeScript-TmLanguage/issues) issues in [`test/issue-cases.ts`](test/issue-cases.ts) (49 adjudicable by a syntactic oracle), graded per issue:
+
+| grammar | handles the bug correctly |
+|---|---|
+| Official TextMate | 38.8% (19/49) |
+| **Monogram** | **77.6% (38/49)** |
+
+Independently-verified **Monogram fixes** — official structurally wrong, Monogram right: **21** issues (#815, #853, #859, #873, #883, #891, #973, #978, #981, #983, #1014, #1020, #1025, #1040, #1041, #1043, #1050, #1051, #1053, #1056, #1059). Monogram regressions vs official: 2 (#819, #876).
+
+**Token-level role accuracy** (every parser-classifiable token):
+
+| corpus | Official | Monogram |
+|---|---|---|
+| documented bug ledger (534 tokens) | 83.5% | 94.2% |
+| TS parser conformance (15856 tokens) | 99.0% | 96.3% |
+
+<sub>Regenerate: `node test/highlight-bench.ts --write-readme`. Neutral oracle + frozen scope→role table: [`test/scope-roles.ts`](test/scope-roles.ts).</sub>
+<!-- bench:end -->
 
 ## What you get
 
@@ -136,7 +165,7 @@ A new language is **one grammar file, proven the way TypeScript is** — by its 
 
 The highlighter, lexer, and CST types fall out of step 1 automatically (the tree-sitter / Lezer / Monarch generators give you a scaffold to finish); steps 2–3 are how the result earns trust. A new-language PR is reviewed on exactly two numbers: **parser conformance** and **highlighter coverage vs the official grammar**.
 
-> The conformance and coverage *harnesses* are currently TypeScript-specific — they call `tsc`'s `parseDiagnostics` and read VS Code's bundled TS grammar. A contributor adapts those harness scripts to their reference compiler's diagnostic API; the engine and generators themselves are reused unchanged.
+> The conformance and highlighter *harnesses* are currently TypeScript-specific — they call `tsc`'s `parseDiagnostics` and read VS Code's bundled TS grammar. A contributor adapts those harness scripts to their reference compiler's diagnostic API; the engine and generators themselves are reused unchanged.
 
 ## Embedded languages
 
@@ -154,25 +183,27 @@ node test/agnostic.ts            # proves the engine is language-agnostic
 node test/test-issues.ts         # replays 50 official-grammar bugs against the generated grammar
 ```
 
-The conformance and coverage suites need external corpora and are **excluded from CI** for that reason:
+The conformance and highlighter benches read external grammars/corpora and are **excluded from CI** for that reason:
 
 ```bash
 git clone https://github.com/microsoft/TypeScript /tmp/ts-repo   # the conformance corpus
-node test/conformance-matrix.ts  # THE metric: bidirectional vs tsc — 100% valid / 97.8% both ways
+node test/conformance-matrix.ts  # THE parser metric: bidirectional vs tsc — 100% valid / 97.8% both ways
 
-# coverage reads VS Code's bundled TypeScript grammar (path is currently macOS-specific):
-node test/coverage.ts            # highlighter vs the official grammar — 99.3%
+# the highlighter bench reads VS Code's bundled TS grammar (macOS path; override with MONOGRAM_OFFICIAL_TM):
+node test/highlight-bench.ts                       # absolute correctness, both grammars vs a neutral tsc oracle
+node test/highlight-bench.ts --corpus adversarial  # documented bug ledger only (no /tmp/ts-repo needed)
+node test/highlight-bench.ts --write-readme        # regenerate the head-to-head block above
 ```
 
 > `test/run-conformance.ts` reports a *raw accept-rate* (94.2% over all 3776 files, multi-file cases included) — an acceptance-only sanity check, not the bidirectional proof. `conformance-matrix.ts` is the number this README quotes.
 
 ## Known differences from the official highlighter
 
-On the comparison sample, **4 token instances** (across 3 patterns) are scoped differently from VS Code's official TypeScript grammar. All are intentional — in some, Monogram is arguably *more* correct:
+A handful of token patterns are scoped differently from VS Code's official TypeScript grammar — all intentional, and in some Monogram is arguably *more* correct (these are *deliberate divergences*, distinct from the bug-class fixes the [bench](#head-to-head-highlighter-correctness-vs-the-official-grammar) measures):
 
 | Token | Monogram | Official | Why we keep ours |
 |---|---|---|---|
-| `console` in `console.log` | `support.variable` | `variable.other.object` | We highlight built-in globals (`console`, `window`, …) distinctly — a deliberate, common choice. (2 instances in the sample.) |
+| `console` in `console.log` | `support.variable` | `variable.other.object` | We highlight built-in globals (`console`, `window`, …) distinctly — a deliberate, common choice. |
 | `transform` (a function parameter) | `variable.parameter` | `entity.name.function` | It **is** a parameter. Official's heuristic mis-reads `name: (…) => T` as a function definition; we're more correct. |
 | `error` (the method in `console.error(…)`) | `entity.name.function` | `variable.other.readwrite` | We scope a called method as a function name — arguably more informative. |
 
