@@ -4,7 +4,7 @@ Write a language's grammar **once**. Monogram runs that single definition as a r
 
 > *mono + grammar — one grammar definition, many derived artifacts.*
 
-**Status:** an active research project. TypeScript is the one language implemented today ([`examples/typescript.ts`](examples/typescript.ts)); the engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
+**Status:** an active research project with **two languages on one shared core**. TypeScript ([`examples/typescript.ts`](examples/typescript.ts)) is mature — 100% valid-code coverage, 97.8% bidirectional, 99.3% highlighter (see [Results](#results)). JavaScript ([`examples/javascript.ts`](examples/javascript.ts)) is newer: it parses real-world JS and is the standalone ECMAScript base that the TypeScript grammar extends — but it does not yet have TypeScript-level conformance or highlighter-coverage validation. The engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
 
 ## Quick start
 
@@ -126,6 +126,8 @@ const Regex    = token(/\/…\//, {
 
 ## Adding a language
 
+This isn't hypothetical: **JavaScript is the second language on the same engine**, and it shares a core with TypeScript rather than duplicating it. JavaScript is the syntactic *subset* of the ECMAScript family (TypeScript = JavaScript + a type layer), so [`examples/javascript.ts`](examples/javascript.ts) is the standalone base that **owns and exports** the shared vocabulary — the token set, the operator-precedence ladder, the base scope map, and the reserved-word guards — and [`examples/typescript.ts`](examples/typescript.ts) *imports* that vocabulary and extends it with the type layer (type rules + the extra type scopes). The dependency runs subset → superset only; the JS grammar has no type knowledge and depends on nothing but the engine's combinator API. (The rules themselves are copied-and-stripped rather than shared, because combinator rules bind their references at definition time; only the vocabulary layer is imported.) JavaScript parses real-world JS — [`test/js-conformance.ts`](test/js-conformance.ts) accepts 61/61 curated valid-JS snippets and rejects TypeScript-only syntax (type annotations, `enum`, `!`, `<T>` casts), with ground truth being `tsc`'s own parser in JS mode. It does not yet have TypeScript's conformance- and coverage-level validation, but it already proves the claim below that a second language is *one grammar file on an unchanged engine*.
+
 A new language is **one grammar file, proven the way TypeScript is** — by its own parser conformance, not by eyeballing colors:
 
 1. **Write the grammar** with the combinator API ([`src/api.ts`](src/api.ts)). All language-specifics live here; the engine stays untouched.
@@ -216,4 +218,4 @@ Every highlighter target (TextMate, tree-sitter queries, Lezer styleTags, Monarc
 | ungrammar | AST types | — | — |
 | **Monogram** | **CST, conformance-proven** | **derived from the parser grammar** | **yes** |
 
-These tools all have real parsers; what none of them do is *derive the highlighter from the parser's own grammar as a single source* — which is the one thing Monogram is for. (Conformance and coverage numbers in [Results](#results).)
+These tools all have real parsers; what none of them do is *derive the highlighter from the parser's own grammar as a single source* — which is the one thing Monogram is for. There are now **two languages on that single engine** — JavaScript and TypeScript, sharing one ECMAScript core (subset → superset) rather than two hand-maintained grammars. (Conformance and coverage numbers in [Results](#results).)
