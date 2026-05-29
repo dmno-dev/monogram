@@ -1,53 +1,74 @@
 # Monogram
 
-Define a language's grammar **once**. Monogram validates that grammar by running it as a real parser against the language's official conformance suite — then derives a **TextMate syntax highlighter** from the same, proven grammar. The highlighter's correctness flows down from a parser-verified model instead of up from regex guesswork.
+Write a language's grammar **once**. Monogram runs that single definition as a real parser, proves it against the language's official conformance suite, and then **derives a syntax highlighter** — TextMate, tree-sitter, Lezer, Monarch — from the same proven grammar. The highlighter's correctness flows *down* from a parser-verified model instead of *up* from hand-tuned regex.
 
-> *mono + grammar: one grammar, many derived artifacts.*
+> *mono + grammar — one grammar definition, many derived artifacts.*
+
+**Status:** an active research project. TypeScript is the one language implemented today ([`examples/typescript.ts`](examples/typescript.ts)); the engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
+
+## Quick start
+
+Requires Node 24+ (runs `.ts` directly — no build step, no `tsx`).
+
+```bash
+npm install
+node src/cli.ts examples/typescript.ts        # regenerate every artifact from the grammar
+```
+
+```ts
+import { createParser } from './src/gen-parser.ts';
+import grammar from './examples/typescript.ts';
+
+const { parse } = createParser(grammar);
+const cst = parse('const x = f(a, b)');        // → a concrete syntax tree
+```
 
 ## The idea
 
-A TextMate grammar is a pile of regexes guessing at a language's structure. It's written by hand, independently of any parser, and it's perpetually wrong at the edges — VS Code's official TypeScript grammar carries [100+ open issues](https://github.com/microsoft/TypeScript-TmLanguage/issues) for exactly this reason. Everyone who tries to fix it is competing on the same losing axis: *who can hand-write better regexes.*
+A TextMate grammar is a pile of regexes guessing at a language's structure. It's written by hand, independently of any parser, and it's perpetually wrong at the edges — VS Code's official TypeScript grammar carries [100+ open issues](https://github.com/microsoft/TypeScript-TmLanguage/issues) for exactly this reason. Everyone trying to fix it competes on the same losing axis: *who can hand-write better regexes.*
 
-Monogram inverts the dependency:
+Take `typeof x < y`. A regex highlighter has to guess whether `<` opens a generic argument list or is a less-than comparison — and it guesses wrong somewhere, forever. A **parser** doesn't guess; the grammar already decides. Monogram inverts the dependency:
 
-1. **Write the grammar, then prove it.** The grammar is executable. Monogram runs it as a recursive-descent + Pratt parser over the TypeScript conformance suite and measures conformance *bidirectionally* — it must accept what `tsc` accepts **and** reject what `tsc` rejects. Today it parses **100% of valid single-file cases** (3376 / 3376 — zero valid-code gaps) and agrees with `tsc` **bidirectionally on 97.8%** (3585 / 3664); the remaining gap is *over-acceptance* (the grammar is still too permissive on some invalid inputs — and most of what's left is code TypeScript itself parses cleanly and only rejects later with a *semantic* error, which a context-free grammar is not meant to catch), and the goal is to push as close to 100% both ways as a pure grammar can — a *verified, complete model* of the language's syntax, not an approximation.
+1. **Write the grammar, then prove it.** The grammar is executable. Monogram runs it as a recursive-descent + [Pratt](https://en.wikipedia.org/wiki/Operator-precedence_parser) (operator-precedence) parser over the TypeScript conformance suite and measures *bidirectionally* — it must **accept** every input `tsc` accepts **and reject** every input `tsc` rejects. Today: **100%** of valid single-file cases parse, and **97.8%** bidirectional agreement (see [Results](#results)).
 
-2. **Derive the highlighter from the proven grammar.** The TextMate grammar is generated from that same parser-validated grammar — never hand-written. Its correctness is underwritten by the parser conformance run, not by regex tuning.
+2. **Derive the highlighter from the proven grammar.** The TextMate grammar — and the tree-sitter / Lezer / Monarch ones — are generated from that same parser-validated definition, never hand-written. Their correctness is underwritten by the conformance run, not by regex tuning.
 
-That's the whole point, and it's a categorical advantage, not an incremental one: a highlighter derived from a parser-complete grammar isn't *a better hand-written grammar* — it's playing a different game. You cannot out-regex it, because its correctness comes from a dimension hand-written grammars never operate in. Push the grammar to 100% parser coverage and the highlighter comes along for free, correct by construction.
+The remaining 2.2% bidirectional gap is **over-acceptance** — the grammar is still too permissive on some *invalid* inputs (valid-code coverage is already 100%; nothing valid is missed). Most of what's left is code `tsc`'s parser rejects via *context-sensitive* rules a context-free grammar can't express — reserved-word placement, modifier combinations like `default abstract class`, `super` type-arguments — the kind of constraint a highlighter grammar was never meant to enforce. We push as close to 100% both ways as a pure grammar can; that's the asymptote, and the highlighter rides down to it for free.
 
-## What you get
-
-From one grammar definition (a small TypeScript combinator API):
-
-- **A lexer** — tokenizes source straight from the grammar's token definitions; usable on its own (`createLexer(grammar).tokenize`).
-- **A CST parser** — recursive descent + Pratt operator precedence on top of the lexer, producing a full-fidelity concrete syntax tree where every token is a node.
-- **A TextMate grammar** — a `.tmLanguage.json` for editor syntax highlighting, derived from the same rules.
-- **A VS Code language configuration** — a `language-configuration.json` (comments, bracket pairs, auto-closing/surrounding pairs, folding, indentation) for editor behavior.
-
-And — from the same grammar — first-pass generators for the rest of the editor ecosystem (validated structurally; some parts are scaffolds):
-
-- **tree-sitter** — `grammar.js` + `queries/highlights.scm` + an external-scanner scaffold (Neovim / Helix / Zed / GitHub).
-- **Lezer** — a CodeMirror 6 grammar + `styleTags` + a JS external tokenizer.
-- **Monarch** — a Monaco (web) tokenizer.
-- **CST node types** — TypeScript types (a discriminated union keyed by rule) for typed tree consumers.
+That's the categorical part: a highlighter derived from a parser-proven grammar isn't *a better hand-written grammar* — it's playing a different game. You can't out-regex it, because its correctness comes from a dimension hand-written grammars never operate in. The evidence is concrete — [`test/test-issues.ts`](test/test-issues.ts) replays **39 real bugs** from the official grammar's issue tracker (the `typeof x < y` ambiguities, regex-after-keyword cases, `as`-casts inside `<>`) and all **288** token checks pass, because those failure modes are *structurally precluded* by a parser rather than patched one regex at a time.
 
 ## Results
 
-Validated on TypeScript (grammar: [`examples/typescript.ts`](examples/typescript.ts), 628 lines):
+Measured against the TypeScript compiler's own conformance suite (single-file cases; `tsc`'s `parseDiagnostics` is ground truth):
 
 ```
-Valid-code coverage  100%    3376 / 3376 valid single-file conformance cases parse   (zero gaps)
-Bidirectional        97.8%   3585 / 3664 — also rejects what tsc rejects   (gap = over-acceptance; most is TS semantic-only rejection)
+Valid-code coverage  100%    3376 / 3376 valid single-file cases parse        (zero gaps; no valid code missed)
+Bidirectional        97.8%   3585 / 3664 — also rejects what tsc rejects      (gap = over-acceptance only)
 Highlighter          99.3%   589 / 593 tokens match VS Code's official grammar
 Official-grammar bugs  39    real TypeScript-TmLanguage issues replayed (288 token checks) — all pass
-Source size          628 ln  one grammar file (32 KB) replaces 3331 lines of hand-written TextMate YAML (140 KB) — 5× less, and it also yields the parser
-Engine               language-agnostic — no TypeScript-specific code
+Source size          628 lines — 5× fewer than the official 3331-line hand-written TextMate YAML
+Engine               language-agnostic — zero TypeScript-specific code (proven by test/agnostic.ts)
 ```
 
-Read those last two lines together — they're the whole argument. **One 628-line grammar replaces the official 3331-line hand-written TextMate YAML at a fifth the size** *and* throws in a conformance-proven parser the official grammar never had. **Less to maintain, and demonstrably more correct:** [`test/test-issues.ts`](test/test-issues.ts) replays **39 real bugs** from the [official grammar's issue tracker](https://github.com/microsoft/TypeScript-TmLanguage/issues) — the `typeof x < y` generic-vs-comparison ambiguities, regex-after-keyword cases, `as`-cast-in-`<>` confusions — and all 288 token checks pass, because those failure modes are *structurally* precluded by a real parser rather than patched one regex at a time.
+Read the last two lines together — that's the whole argument. **One 628-line grammar replaces the official 3331-line hand-written TextMate YAML at a fifth the line count** *and* throws in a conformance-proven parser the official grammar never had. **Less to maintain, and demonstrably more correct.**
 
-The parser number is the one that matters: it's the grammar's correctness proof. Most remaining failures are intentional *error* tests that the TypeScript compiler also rejects. The highlighter accuracy is what that proof buys you — and the four remaining differences are deliberate (see [Known differences](#known-differences-from-the-official-highlighter)).
+The valid-code/bidirectional numbers are the grammar's correctness proof; the 99.3% highlighter accuracy is what that proof buys you — and the four remaining token differences are deliberate (see [Known differences](#known-differences-from-the-official-highlighter)).
+
+## What you get
+
+From one grammar definition (a small TypeScript combinator API), three outputs are **fully functional**:
+
+- **A lexer** — tokenizes source straight from the grammar's token definitions; usable on its own (`createLexer(grammar).tokenize`).
+- **A CST parser** — recursive descent + Pratt precedence on top of the lexer, producing a **CST** (concrete syntax tree: every token is a node, including punctuation and keywords — not just the semantically meaningful nodes an AST keeps).
+- **A TextMate grammar** — a `.tmLanguage.json` for VS Code / Sublime syntax highlighting, derived from the same rules. (TextMate *scopes* are the dot-separated labels — `entity.name.function`, `keyword.control` — that a theme maps to colors.)
+- **A VS Code language configuration** — `language-configuration.json` (comments, bracket pairs, auto-close/surround, folding) derived from the same tokens.
+- **CST node types** — a TypeScript discriminated union (keyed by rule) for typed tree consumers.
+
+And — from the same grammar — **first-pass generators** for the rest of the ecosystem. These are structurally valid and a strong starting point, but each carries known incomplete sections (marked in the output) that need hand-tuning before production:
+
+- **tree-sitter** — `grammar.js` + `queries/highlights.scm` + an external-scanner scaffold (template state machine stubbed).
+- **Lezer** — a CodeMirror 6 grammar + `styleTags` + a JS tokenizer (a handful of token regexes can't be expressed in Lezer's static model; marked `INCOMPLETE`).
+- **Monarch** — a Monaco (web) tokenizer (functional, bounded by JS-regex limits).
 
 ## The grammar is the source of truth
 
@@ -76,17 +97,18 @@ export default defineGrammar({
 });
 ```
 
-The parser uses these rules to build a CST. The highlighter reads the same rule **shapes** and infers scopes — with no manual scope assignment:
+The parser uses these rules to build a CST. The highlighter reads the same rule **shapes** and infers most scopes structurally — with no per-rule annotation:
 
 - `foo(x)` → `foo` is `entity.name.function` (from the `$ '(' …` call form)
 - `obj.name` → `name` is `entity.other.property` (from the `$ '.' Ident` form)
 - `'class' Ident` → `Ident` is `entity.name.type` (from declaration structure)
-- `':' Type` → enter type-annotation highlighting (from the `type` rule flag)
 - `Expr '<' Type '>' '('` → a generic call, not a comparison (from rule structure)
+
+Flat, irreducible facts — which keywords are control flow, which punctuation is an operator — are declared once in a small `scopes` map (≈45 lines for TypeScript) rather than inferred. Structure is derived; vocabulary is declared.
 
 ## A language-agnostic engine
 
-Nothing in the engine knows about TypeScript. Everything language-specific lives in the grammar — keywords, which token is the identifier, template-literal delimiters, and the regex-vs-division lexer ambiguity are all *declared per token*:
+Nothing in the engine knows about TypeScript. Everything language-specific lives in the grammar — keywords, which token is the identifier, template-literal delimiters, the regex-vs-division lexer ambiguity — all *declared per token*:
 
 ```ts
 const Template = token(/`…`/, { template: { open: '`', interpOpen: '${', interpClose: '}' } });
@@ -104,61 +126,55 @@ const Regex    = token(/\/…\//, {
 
 ## Adding a language
 
-A new language is **one grammar file, proven the way TypeScript is** — by its own parser conformance, not by eyeballing colors. The contribution workflow is grammar-first and test-driven:
+A new language is **one grammar file, proven the way TypeScript is** — by its own parser conformance, not by eyeballing colors:
 
-1. **Write the grammar** with the combinator API ([`src/api.ts`](src/api.ts)) — tokens, operator precedence, rules. Everything language-specific lives here; you never touch the engine.
-2. **Prove it as a parser** against the language's *own* official test suite. Point the conformance harness at that corpus and measure **bidirectionally** — accept what the reference accepts **and** reject what it rejects (`tsc`'s `parseDiagnostics` for TypeScript; the equivalent for another language). The grammar is "ready" when valid-code coverage hits 100% and bidirectional agreement is high. That run *is* the correctness proof — the same standard TypeScript is held to here, not a lower one.
-3. **Bring the reference highlighter as the comparison baseline.** Drop in the language's existing official TextMate grammar so [`test/coverage.ts`](test/coverage.ts) can diff the *derived* highlighter against a real-world target. Coverage is then *measured against the thing you're replacing*, not asserted — and every divergence is either a win to keep or a gap to close, on the record.
+1. **Write the grammar** with the combinator API ([`src/api.ts`](src/api.ts)). All language-specifics live here; the engine stays untouched.
+2. **Prove it as a parser** against the language's *own* official test suite, measured **bidirectionally** (accept what the reference accepts, reject what it rejects). A grammar is "ready" when valid-code coverage is 100% and bidirectional agreement is high — that run is the correctness proof.
+3. **Bring the reference highlighter as the baseline.** Drop in the language's existing official TextMate grammar so coverage is *measured against the thing you're replacing*, not asserted.
 
-The highlighter, lexer, tree-sitter / Lezer / Monarch grammars, and CST types all fall out of step 1 for free; steps 2–3 are how the contribution *earns trust*. So a new-language PR is reviewed on exactly two numbers: its **parser conformance** (the proof) and its **highlighter coverage vs the official grammar** (the payoff) — the same two this README leads with for TypeScript.
+The highlighter, lexer, and CST types fall out of step 1 automatically (the tree-sitter / Lezer / Monarch generators give you a scaffold to finish); steps 2–3 are how the result earns trust. A new-language PR is reviewed on exactly two numbers: **parser conformance** and **highlighter coverage vs the official grammar**.
 
-## Embedded languages, without the broken seams
+> The conformance and coverage *harnesses* are currently TypeScript-specific — they call `tsc`'s `parseDiagnostics` and read VS Code's bundled TS grammar. A contributor adapts those harness scripts to their reference compiler's diagnostic API; the engine and generators themselves are reused unchanged.
 
-Editors highlight embedded snippets — CSS in a template string, a regex literal, SQL in a query, JSDoc in a comment — by handing the region to another language's grammar at the boundary. In VS Code that only works if the host grammar and the embedded grammar, written independently by different plugin authors, *both* implement the boundary correctly. Nothing checks that the two halves agree, so embedded highlighting is flaky exactly at the seams.
+## Embedded languages
 
-Monogram declares embedding points in the grammar itself (a token's `embed` annotation). When the languages on both sides are Monogram grammars, one system owns the whole boundary: it can generate the host and the embedded grammar together and exercise the seam in a single integrated self-test, so the boundary is *verified* rather than left to two strangers happening to agree. The cross-language robustness problem dissolves for the same reason the highlighter does — one source of truth, checked end to end.
+Editors highlight embedded snippets — CSS in a template string, a regex literal, JSDoc in a comment — by handing the region to another grammar at the boundary. In VS Code that works only if the host grammar and the embedded grammar, written independently by different authors, *both* implement the boundary correctly; nothing checks that they agree, so embedded highlighting is flaky at the seams.
 
-## Usage
+Monogram declares embedding points in the grammar (a token's `embed` annotation), which today emits the standard TextMate `contentName` injection — the same model VS Code uses. The larger payoff is the design goal it sets up but **does not yet implement**: when the languages on both sides are Monogram grammars, one system can generate host and embedded together and exercise the seam in a single integrated self-test — verifying the boundary instead of hoping two strangers agree. The annotation exists; the joint seam-test does not, yet.
 
-Requires Node 24+ (runs `.ts` directly — no build step, no `tsx`).
+## Tests
 
-```bash
-npm install
-
-# generate the TextMate grammar from the grammar definition
-node src/cli.ts examples/typescript.ts        # → examples/typescript.tmLanguage.json
-```
-
-Parse some source into a CST:
-
-```ts
-import { createParser } from './src/gen-parser.ts';
-import grammar from './examples/typescript.ts';
-
-const { parse } = createParser(grammar);
-const cst = parse('const x = f(a, b)');        // → concrete syntax tree
-```
-
-Tests:
+Self-contained (no external setup):
 
 ```bash
 node test/sanity-check.ts        # quick smoke test
-node test/run-conformance.ts     # parser vs the TypeScript conformance suite — the correctness proof
-node test/coverage.ts            # highlighter vs VS Code's official grammar
 node test/agnostic.ts            # proves the engine is language-agnostic
+node test/test-issues.ts         # replays 39 official-grammar bugs against the generated grammar
 ```
+
+The conformance and coverage suites need external corpora and are **excluded from CI** for that reason:
+
+```bash
+git clone https://github.com/microsoft/TypeScript /tmp/ts-repo   # the conformance corpus
+node test/conformance-matrix.ts  # THE metric: bidirectional vs tsc — 100% valid / 97.8% both ways
+
+# coverage reads VS Code's bundled TypeScript grammar (path is currently macOS-specific):
+node test/coverage.ts            # highlighter vs the official grammar — 99.3%
+```
+
+> `test/run-conformance.ts` reports a *raw accept-rate* (94.2% over all 3776 files, multi-file cases included) — an acceptance-only sanity check, not the bidirectional proof. `conformance-matrix.ts` is the number this README quotes.
 
 ## Known differences from the official highlighter
 
-On the comparison sample, **4 tokens** are scoped differently from VS Code's official TypeScript grammar. All are intentional — in some, Monogram is arguably *more* correct:
+On the comparison sample, **4 token instances** (across 3 patterns) are scoped differently from VS Code's official TypeScript grammar. All are intentional — in some, Monogram is arguably *more* correct:
 
 | Token | Monogram | Official | Why we keep ours |
 |---|---|---|---|
-| `console` in `console.log` | `support.variable` | `variable.other.object` | We highlight built-in globals (`console`, `window`, …) distinctly — a deliberate, common choice. |
+| `console` in `console.log` | `support.variable` | `variable.other.object` | We highlight built-in globals (`console`, `window`, …) distinctly — a deliberate, common choice. (2 instances in the sample.) |
 | `transform` (a function parameter) | `variable.parameter` | `entity.name.function` | It **is** a parameter. Official's heuristic mis-reads `name: (…) => T` as a function definition; we're more correct. |
-| `error` (the method in `console.error(…)`) | `entity.name.function` | `variable.other` | We scope a called method as a function name — arguably more informative. |
+| `error` (the method in `console.error(…)`) | `entity.name.function` | `variable.other.readwrite` | We scope a called method as a function name — arguably more informative. |
 
-> Built-in class names in **type** position (e.g. `Error` in `extends Error`) now correctly emit `entity.name.type`, matching official; in **value** position (`new Error()`) they remain `support.class`, also matching official.
+> Built-in class names in **type** position (e.g. `Error` in `extends Error`) correctly emit `entity.name.type`, matching official; in **value** position (`new Error()`) they remain `support.class`, also matching official.
 
 Matching the official grammar *exactly* would, in cases like `transform`, make the output worse. The metric counts these as differences, not defects.
 
@@ -169,7 +185,7 @@ examples/typescript.ts                one grammar (TypeScript combinator API)
         │
         ├─ src/gen-lexer.ts  ───────▶ lexer → tokens        (standalone: createLexer)
         │        ▲ composed by
-        ├─ src/gen-parser.ts ───────▶ CST parser   (recursive descent + Pratt + packrat memo;
+        ├─ src/gen-parser.ts ───────▶ CST parser   (recursive descent + Pratt + packrat memoization;
         │                             run against the conformance suite = the grammar's proof)
         │
         ├─ src/gen-tm.ts ───────────▶ typescript.tmLanguage.json            (TextMate highlighter)
@@ -183,19 +199,21 @@ shared  src/grammar-utils.ts          structural helpers used across stages
         src/api.ts, types.ts          the grammar's combinator + type surface
 ```
 
-Every highlighter target (TextMate, tree-sitter queries, Lezer styleTags, Monarch) is produced by the *same* structural scope-inference (`gen-tm`), retargeted per format — so highlighting stays consistent across ecosystems.
+Every highlighter target (TextMate, tree-sitter queries, Lezer styleTags, Monarch) is produced by the *same* structural scope-inference, retargeted per format — so highlighting stays consistent across ecosystems.
 
-- **One grammar, many derived artifacts.** `gen-lexer` builds a tokenizer from the token definitions + lexer hints; `gen-parser` composes that lexer and interprets the rules to build a CST; `gen-tm` reads the same rule *shapes* to derive TextMate patterns; `gen-vscode-config` derives the editor config (comments, brackets, auto-close) from the same tokens and `scopes`. Shared structural primitives (`grammar-utils.ts`) — e.g. one keyword/punctuation predicate — keep them consistent.
-- **CST, not AST.** The parser keeps every token (punctuation, keywords) as a node — required for the highlighter and for lossless source reconstruction. Roughly 2× the nodes of an AST, by design.
-- **Every stage is language-agnostic.** All language specifics live in the grammar; lexer, parser and generator are generic, reusable runtimes.
+- **One grammar, many derived artifacts.** `gen-lexer` builds a tokenizer from the token definitions; `gen-parser` composes it and interprets the rules into a CST; `gen-tm` reads the same rule *shapes* to derive TextMate patterns; `gen-vscode-config` derives editor config from the same tokens and `scopes`. Shared structural primitives (`grammar-utils.ts`) keep them consistent.
+- **CST, not AST.** Keeping every token (punctuation, keywords) as a node is required for the highlighter and for lossless source reconstruction — roughly 2× the nodes of an AST, by design.
+- **Every stage is language-agnostic.** All language specifics live in the grammar; lexer, parser, and generators are generic, reusable runtimes.
 
 ## Prior art
 
 | Tool | Parser | Highlighting | Single source |
 |------|:---:|:---:|:---:|
 | TextMate grammars | — | manual regex | — |
-| tree-sitter | yes | queries (separate) | — |
+| tree-sitter | yes | queries (written separately) | — |
 | ANTLR | yes | — | — |
-| Langium | yes | Monarch (separate) | — |
+| Langium | yes | Monarch (separate config) | — |
 | ungrammar | AST types | — | — |
-| **Monogram** | **CST (100% valid / 97.8% bidir)** | **auto-derived (99.3%)** | **yes** |
+| **Monogram** | **CST, conformance-proven** | **derived from the parser grammar** | **yes** |
+
+These tools all have real parsers; what none of them do is *derive the highlighter from the parser's own grammar as a single source* — which is the one thing Monogram is for. (Conformance and coverage numbers in [Results](#results).)
