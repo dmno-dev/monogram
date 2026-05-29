@@ -7,7 +7,7 @@
     "test": "node test/sanity-check.ts",
     "conformance": "node test/run-conformance.ts",
     "bench": "node test/highlight-bench.ts",
-    "bench:readme": "node test/highlight-bench.ts --write-readme"
+    "bench:readme": "node test/highlight-bench.ts --corpus adversarial --write-readme"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

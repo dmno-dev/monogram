@@ -78,10 +78,13 @@ Independently-verified **Monogram fixes** — official structurally wrong, Monog
 | corpus | Official | Monogram |
 |---|---|---|
 | documented bug ledger (534 tokens) | 83.5% | 94.2% |
-| TS parser conformance (15856 tokens) | 99.0% | 96.3% |
+
+<sub>Parser-conformance row omitted — run with the TS corpus cloned to `/tmp/ts-repo` to include it.</sub>
 
 <sub>Regenerate: `node test/highlight-bench.ts --write-readme`. Neutral oracle + frozen scope→role table: [`test/scope-roles.ts`](test/scope-roles.ts).</sub>
 <!-- bench:end -->
+
+> **The other side of the ledger (honesty check).** On the *broad* TS parser-conformance corpus — not just the documented bugs — raw token-role accuracy flips: the official grammar's decade of hardening leads (~99% vs ~96%). Monogram's gap there is specific backlog (Unicode identifiers, qualified type names), **not** the ambiguity class above. Clone the TS corpus to `/tmp/ts-repo` and run `node test/highlight-bench.ts` to see both corpora.
 
 ## What you get
 

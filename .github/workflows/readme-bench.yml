@@ -1,0 +1,72 @@
+name: README bench
+
+# Auto-refreshes the highlighter head-to-head block in README.md (between the
+# <!-- bench:start --> / <!-- bench:end --> markers) and commits it back to master.
+#
+# Determinism: the block is the ADVERSARIAL corpus only (the documented-bug ledger
+# in test/issue-cases.ts, all in-repo) graded against a PINNED official grammar
+# fetched below — so the same inputs always yield the same block. The
+# parser-conformance corpus (a heavy, version-sensitive TypeScript clone) is left
+# out on purpose; that axis lives in a hand-written note next to the block.
+#
+# No infinite loop: the bot commit touches only README.md, which is NOT in the
+# paths filter below, so it cannot re-trigger this workflow ([skip ci] is a backstop).
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'examples/typescript.tmLanguage.json'
+      - 'test/highlight-bench.ts'
+      - 'test/scope-roles.ts'
+      - 'test/issue-cases.ts'
+      - '.github/workflows/readme-bench.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: readme-bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned VS Code tag whose bundled TypeScript grammar is the "official" baseline.
+  # Bump this deliberately to re-baseline against a newer official grammar.
+  OFFICIAL_TM_TAG: '1.96.0'
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24+ runs the .ts sources directly (native type stripping) — no build, no tsx.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - name: Fetch pinned official TypeScript grammar
+        run: |
+          curl -fsSL \
+            "https://raw.githubusercontent.com/microsoft/vscode/${OFFICIAL_TM_TAG}/extensions/typescript-basics/syntaxes/TypeScript.tmLanguage.json" \
+            -o "${RUNNER_TEMP}/official-ts.tmLanguage.json"
+
+      - name: Regenerate the README bench block
+        env:
+          MONOGRAM_OFFICIAL_TM: ${{ runner.temp }}/official-ts.tmLanguage.json
+        run: npm run bench:readme
+
+      - name: Commit the refreshed block (if it changed)
+        run: |
+          if git diff --quiet -- README.md; then
+            echo "README bench block already current — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore: refresh README highlighter bench results [skip ci]"
+          git push

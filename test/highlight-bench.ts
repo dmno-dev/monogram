@@ -647,7 +647,7 @@ async function allTs(dir: string): Promise<string[]> {
 
 // ── run selected corpora ──────────────────────────────────────────────────────
 const WRITE_README = argv.includes('--write-readme');
-const WHICH = WRITE_README ? 'both' : (getFlag('--corpus') ?? 'both');
+const WHICH = getFlag('--corpus') ?? 'both'; // --write-readme respects --corpus (CI uses adversarial = deterministic, no TS clone)
 
 let parserSummary: BenchSummary | null = null;
 let advSummary: BenchSummary | null = null;
