@@ -20,8 +20,9 @@ That's the whole point, and it's a categorical advantage, not an incremental one
 
 From one grammar definition (a small TypeScript combinator API):
 
-- **A CST parser** — recursive descent + Pratt operator precedence, producing a full-fidelity concrete syntax tree where every token is a node.
-- **A TextMate grammar** — a `.tmLanguage.json` for editor syntax highlighting, derived from the same rules the parser runs on.
+- **A lexer** — tokenizes source straight from the grammar's token definitions; usable on its own (`createLexer(grammar).tokenize`).
+- **A CST parser** — recursive descent + Pratt operator precedence on top of the lexer, producing a full-fidelity concrete syntax tree where every token is a node.
+- **A TextMate grammar** — a `.tmLanguage.json` for editor syntax highlighting, derived from the same rules.
 
 ## Results
 
@@ -144,18 +145,20 @@ Matching the official grammar *exactly* would, in cases like `transform`, make t
 ```
 examples/typescript.ts            one grammar (TypeScript combinator API)
         │
-        ├─ src/gen-parser.ts ───▶ CST parser   (recursive descent + Pratt + packrat memo)
-        │                         run against the conformance suite = the grammar's proof
+        ├─ src/gen-lexer.ts  ───▶ lexer → tokens        (standalone: createLexer)
+        │        ▲ composed by
+        ├─ src/gen-parser.ts ───▶ CST parser   (recursive descent + Pratt + packrat memo;
+        │                         run against the conformance suite = the grammar's proof)
         │
         └─ src/gen-tm.ts ───────▶ typescript.tmLanguage.json   (TextMate highlighter)
 
-shared  src/grammar-utils.ts      structural helpers used by both
+shared  src/grammar-utils.ts      structural helpers used across stages
         src/api.ts, types.ts      the grammar's combinator + type surface
 ```
 
-- **One grammar, two consumers.** `gen-parser` interprets the rules to parse; `gen-tm` reads the same rule *shapes* to derive TextMate patterns. They share structural primitives (`grammar-utils.ts`) — e.g. a single keyword/punctuation predicate — so they classify tokens identically.
+- **One grammar, three derived stages.** `gen-lexer` builds a tokenizer from the token definitions + lexer hints; `gen-parser` composes that lexer and interprets the rules to build a CST; `gen-tm` reads the same rule *shapes* to derive TextMate patterns. Shared structural primitives (`grammar-utils.ts`) — e.g. one keyword/punctuation predicate — keep them classifying tokens identically.
 - **CST, not AST.** The parser keeps every token (punctuation, keywords) as a node — required for the highlighter and for lossless source reconstruction. Roughly 2× the nodes of an AST, by design.
-- **Both stages are language-agnostic.** All language specifics live in the grammar; the engine is a generic, reusable runtime.
+- **Every stage is language-agnostic.** All language specifics live in the grammar; lexer, parser and generator are generic, reusable runtimes.
 
 ## Prior art
 

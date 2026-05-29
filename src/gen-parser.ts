@@ -1,5 +1,6 @@
 import type { CstGrammar, RuleExpr, RuleDecl } from './types.ts';
-import { collectLiterals, isKeywordLiteral } from './grammar-utils.ts';
+import { isKeywordLiteral } from './grammar-utils.ts';
+import { createLexer, type Token } from './gen-lexer.ts';
 
 // ── CST output ──
 
@@ -21,14 +22,6 @@ export interface CstLeaf {
 
 export type CstChild = CstNode | CstLeaf;
 
-// ── Internal token ──
-
-interface Token {
-  type: string;   // token decl name (e.g. 'Ident'), or '' for punctuation literals
-  text: string;
-  offset: number;
-}
-
 // ── Precedence info ──
 
 interface OpInfo {
@@ -43,24 +36,8 @@ interface OpInfo {
 export function createParser(grammar: CstGrammar) {
   const tokenNames = new Set(grammar.tokens.map(t => t.name));
 
-  // Collect all non-alphabetic literals from rules for punctuation tokenization
-  const allLiterals = new Set<string>();
-  for (const rule of grammar.rules) for (const l of collectLiterals(rule.body)) allLiterals.add(l);
-  for (const level of grammar.precs)
-    for (const op of level.operators) allLiterals.add(op.value);
-
-  const punctLiterals = [...allLiterals]
-    .filter(l => !isKeywordLiteral(l))
-    .sort((a, b) => b.length - a.length);
-
-
-  // Build token matchers (order matters: earlier declarations win)
-  const tokenMatchers = grammar.tokens.map(t => ({
-    name: t.name,
-    regex: new RegExp(`^(?:${t.pattern})`),
-    skip: t.flags.includes('skip'),
-    isRegex: t.flags.includes('regex'),
-  }));
+  // The lexer is a separate stage, built from the same grammar (token defs + lexer hints).
+  const { tokenize } = createLexer(grammar);
 
   // Build precedence table
   const opTable = new Map<string, OpInfo>();
@@ -160,17 +137,9 @@ export function createParser(grammar: CstGrammar) {
     if (prattRules.has(rule.name)) prattClassified.set(rule.name, classifyAlts(rule));
     else if (leftRecSet.has(rule.name)) leftRecClassified.set(rule.name, classifyLeftRec(rule));
   }
-  // ── Lexer hints (declared per-token in the grammar; keep this engine
-  // language-agnostic — nothing below hardcodes a specific language's tokens) ──
-  const identTokenName = grammar.tokens.find(t => t.identifier)?.name;
-  const templateToken = grammar.tokens.find(t => t.template);
-  const templateTokenName = templateToken?.name;
-  const tplOpen = templateToken?.template?.open ?? '';
-  const tplInterpOpen = templateToken?.template?.interpOpen ?? '';
-  const tplInterpClose = templateToken?.template?.interpClose ?? '';
-  const tplBraceOpen = tplInterpOpen.slice(-1);                          // brace that deepens interp nesting ('{' of '${')
-  const tplOpenCode = tplOpen.length === 1 ? tplOpen.charCodeAt(0) : -1; // fast path when the open delimiter is one char
-  // Token names that take the interpolation-aware parseTemplateExpr path in matchExpr.
+  // The template token(s): the parser routes their tokens to the interpolation-aware
+  // parseTemplateExpr path (the lexer owns producing them — see gen-lexer.ts).
+  const templateTokenName = grammar.tokens.find(t => t.template)?.name;
   const templateTokenNames = new Set<string>(grammar.tokens.filter(t => t.template).map(t => t.name));
 
   // ── First-token dispatch ──
@@ -296,143 +265,6 @@ export function createParser(grammar: CstGrammar) {
     if (!fs) return true;                                        // null/unknown → don't filter
     for (const k of fs) if (keyMatchesTok(k, tok)) return true;
     return false;
-  }
-
-  // Regex-vs-division context: declared by the grammar's `regex` token. ($templateTail
-  // is the engine's own synthetic template-end token — always a completed value, so `/`
-  // after it is division in any language; added here rather than asked of the grammar.)
-  const regexCtx = grammar.tokens.find(t => t.regexContext)?.regexContext;
-  const divisionPrevTypes = new Set([...(regexCtx?.divisionAfterTypes ?? []), '$templateTail']);
-  const divisionPrevTexts = new Set(regexCtx?.divisionAfterTexts ?? []);
-  const expressionStartKeywords = new Set(regexCtx?.regexAfterTexts ?? []);
-
-  // Scan from inside a template span to its next boundary: an interpolation hole
-  // (`interpOpen`) or the closing delimiter (`open`). Delimiters come from the
-  // grammar's template token; only called when such a token is declared.
-  function scanTemplateSpan(source: string, pos: number): { endsWithInterp: boolean; end: number } {
-    while (pos < source.length) {
-      if (source[pos] === '\\') {
-        pos += 2;
-      } else if (source.startsWith(tplInterpOpen, pos)) {
-        return { endsWithInterp: true, end: pos + tplInterpOpen.length };
-      } else if (source.startsWith(tplOpen, pos)) {
-        return { endsWithInterp: false, end: pos + tplOpen.length };
-      } else {
-        pos++;
-      }
-    }
-    throw new Error(`Unterminated template literal at offset ${pos}`);
-  }
-
-  // ── Tokenizer ──
-
-  function tokenize(source: string): Token[] {
-    const tokens: Token[] = [];
-    let pos = 0;
-    const templateStack: number[] = [];
-
-    while (pos < source.length) {
-      // Skip whitespace
-      const wsMatch = source.slice(pos).match(/^\s+/);
-      if (wsMatch) { pos += wsMatch[0].length; continue; }
-
-      // Close an interpolation hole (interpClose at baseline depth) → resume the template span.
-      if (templateStack.length > 0 && source.startsWith(tplInterpClose, pos)) {
-        const depth = templateStack[templateStack.length - 1];
-        if (depth === 0) {
-          templateStack.pop();
-          const startPos = pos;
-          pos += tplInterpClose.length;
-          const { endsWithInterp, end } = scanTemplateSpan(source, pos);
-          if (endsWithInterp) {
-            tokens.push({ type: '$templateMiddle', text: source.slice(startPos, end), offset: startPos });
-            templateStack.push(0);
-          } else {
-            tokens.push({ type: '$templateTail', text: source.slice(startPos, end), offset: startPos });
-          }
-          pos = end;
-          continue;
-        } else {
-          templateStack[templateStack.length - 1]--;
-        }
-      }
-
-      // Track nested opening braces inside an interpolation hole
-      if (templateStack.length > 0 && source.startsWith(tplBraceOpen, pos)) {
-        templateStack[templateStack.length - 1]++;
-      }
-
-      // Template literal (simple or interpolated) — only if the grammar declares a template token.
-      if (templateToken && (tplOpenCode >= 0 ? source.charCodeAt(pos) === tplOpenCode : source.startsWith(tplOpen, pos))) {
-        const startPos = pos;
-        pos += tplOpen.length;
-        const { endsWithInterp, end } = scanTemplateSpan(source, pos);
-        if (endsWithInterp) {
-          tokens.push({ type: '$templateHead', text: source.slice(startPos, end), offset: startPos });
-          templateStack.push(0);
-        } else {
-          tokens.push({ type: templateTokenName!, text: source.slice(startPos, end), offset: startPos });
-        }
-        pos = end;
-        continue;
-      }
-
-      const remaining = source.slice(pos);
-      let matched = false;
-
-      // Try token patterns in declaration order (the template token is handled above)
-      for (const tm of tokenMatchers) {
-        if (tm.name === templateTokenName) continue;
-        if (tm.isRegex) {
-          const prev = tokens[tokens.length - 1];
-          if (prev) {
-            // Expression-start keywords (in, throw, return, etc.) flip back to regex context
-            const isExprKeyword = prev.type === identTokenName && expressionStartKeywords.has(prev.text);
-            if (!isExprKeyword && (divisionPrevTypes.has(prev.type) || divisionPrevTexts.has(prev.text))) {
-              continue;
-            }
-          }
-        }
-        const m = remaining.match(tm.regex);
-        if (m) {
-          if (!tm.skip) {
-            tokens.push({ type: tm.name, text: m[0], offset: pos });
-          }
-          pos += m[0].length;
-          matched = true;
-          break;
-        }
-      }
-
-      if (!matched) {
-        // Try punctuation literals (longest first)
-        for (const lit of punctLiterals) {
-          if (remaining.startsWith(lit)) {
-            tokens.push({ type: '', text: lit, offset: pos });
-            pos += lit.length;
-            matched = true;
-            break;
-          }
-        }
-      }
-
-      if (!matched && identTokenName) {
-        // Fallback: a Unicode identifier the declared identifier token's pattern may have
-        // missed (e.g. accented or non-Latin names). Tagged with that token's name.
-        const identMatch = remaining.match(/^[\p{L}\p{Nl}_$][\p{L}\p{Nl}\p{Nd}\p{Mn}\p{Mc}\p{Pc}_$]*/u);
-        if (identMatch) {
-          tokens.push({ type: identTokenName, text: identMatch[0], offset: pos });
-          pos += identMatch[0].length;
-          matched = true;
-        }
-      }
-
-      if (!matched) {
-        throw new Error(`Unexpected character at offset ${pos}: '${source[pos]}'`);
-      }
-    }
-
-    return tokens;
   }
 
   // ── Parser core ──
