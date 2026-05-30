@@ -15,8 +15,27 @@
 (decl name: (ident) @function)
 (decl name: (ident) @type)
 
-;; Type-reference identifiers (inside a type node) → @type.
+;; Declaration names, keyword-anchored (disambiguates shared decl rules).
+(expr "class" (ident) @type)
+(expr "function" (ident) @function)
+(decl "function" (ident) @function)
+(decl "interface" (ident) @type)
+(decl "type" (ident) @type)
+(decl "class" (ident) @type)
+(decl "enum" (ident) @type)
+(decl "namespace" (ident) @type)
+
+;; Type-reference identifiers (inside a type node) -> @type.
 (type (ident) @type)
+
+;; Structural member / type-param / property-access captures.
+(type_param (ident) @type)
+(member_name (ident) @property)
+(type_member (ident) @property)
+(expr (expr) (ident) @property)
+
+;; Enum-like value members (override member-key, which would say @property).
+(enum_member (member_name (ident) @variable))
 
 ;; Literal token nodes.
 (shebang) @comment

@@ -15,6 +15,16 @@
 (decl name: (ident) @function)
 (decl name: (ident) @type)
 
+;; Declaration names, keyword-anchored (disambiguates shared decl rules).
+(expr "class" (ident) @type)
+(expr "function" (ident) @function)
+(decl "function" (ident) @function)
+(decl "class" (ident) @type)
+
+;; Structural member / type-param / property-access captures.
+(member_name (ident) @property)
+(expr (expr) (ident) @property)
+
 ;; Literal token nodes.
 (shebang) @comment
 (jsdoc) @comment.documentation

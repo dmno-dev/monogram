@@ -755,3 +755,46 @@ if (argv.includes('--engines')) {
     console.log(`  ${s.name.padEnd(32)} ${((s.correct / s.total) * 100).toFixed(1)}%  (${s.correct}/${s.total})`);
   }
 }
+
+// --miss-mts: dump Monogram tree-sitter's MISSES grouped by (role → got/want family),
+// flagging how many official tree-sitter gets right (= the closeable gap). Needs
+// MONOGRAM_TS_WASM. The diagnostic that drives chasing the accuracy number up.
+if (argv.includes('--miss-mts')) {
+  const advInputs = [
+    ...issueTests.map((t) => ({ name: t.label, text: t.input })),
+    ...issueMultiLine.map((t) => ({ name: t.label, text: t.lines.join('\n') })),
+  ];
+  const tsOk = await loadTreeSitter();
+  const mtsWasm = process.env.MONOGRAM_TS_WASM;
+  if (!mtsWasm || !(await loadMonogramTreeSitter(mtsWasm, process.env.MONOGRAM_TS_QUERY ?? 'examples/tree-sitter/typescript/queries/highlights.scm'))) {
+    console.error('set MONOGRAM_TS_WASM (and optionally MONOGRAM_TS_QUERY) to a built wasm'); process.exit(1);
+  }
+  const focus = process.env.MISS_ROLE; // set to a role to print each miss's snippet+context
+  const groups = new Map<string, { n: number; offRight: number; ex: Set<string> }>();
+  for (const inp of advInputs) {
+    const sf = ts.createSourceFile('c.ts', inp.text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    if (((sf as any).parseDiagnostics?.length ?? 0) > 0) continue;
+    let gold: GoldToken[]; try { gold = oracle(inp.text); } catch { continue; }
+    const mts = monogramTreesitterFamilies(inp.text);
+    const off = tsOk ? treesitterFamilies(inp.text) : [];
+    for (const g of gold) {
+      if (ROLE_SPEC[g.role].tier === 'lexical' || roleFamily(g.role) === 'punct') continue;
+      const ok = acceptableFamilies(g.role);
+      const fam = familyAt(mts, g.start);
+      if (fam && ok.has(fam)) continue; // correct
+      const offFam = familyAt(off, g.start);
+      const key = `${g.role.padEnd(13)} got:${(fam || '∅').padEnd(9)} want:{${[...ok].join('|')}}`;
+      if (!groups.has(key)) groups.set(key, { n: 0, offRight: 0, ex: new Set() });
+      const e = groups.get(key)!; e.n++; if (offFam && ok.has(offFam)) e.offRight++; if (e.ex.size < 6) e.ex.add(g.text);
+      if (focus && g.role === focus) {
+        const ctx = inp.text.slice(Math.max(0, g.start - 20), g.start + 20).replace(/\n/g, '⏎');
+        console.log(`  «${g.text}» got:${fam || '∅'} off:${offFam || '∅'}  …${ctx}…`);
+      }
+    }
+  }
+  const rows = [...groups.entries()].sort((a, b) => b[1].n - a[1].n);
+  console.log('\n── Monogram tree-sitter MISSES (worst first; offRight = official gets it → closeable) ──');
+  let total = 0;
+  for (const [k, v] of rows) { total += v.n; console.log(`  n=${String(v.n).padStart(2)}  off=${v.offRight}/${v.n}  ${k}  e.g. ${[...v.ex].join('  ')}`); }
+  console.log(`  ── ${total} misses total ──`);
+}

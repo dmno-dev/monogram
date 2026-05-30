@@ -821,7 +821,7 @@ interface ScmRule {
 function buildHighlightsScm(
   grammar: CstGrammar,
   ctx: GrammarJsContext,
-  nameFieldsByRule: { rule: string; capture: string }[],
+  nameFieldsByRule: { rule: string; capture: string; keyword: string }[],
 ): string {
   const { scopeOverrides } = grammar;
   const out: string[] = [];
@@ -952,13 +952,69 @@ function buildHighlightsScm(
   // (primitive, user type, or a qualified-name part — the nesting carries each one).
   // This is the tree-sitter analogue of gen-tm's entity.name.type inference, and the
   // reason builtins/primitives need no @type predicate: position decides type-ness.
+  // Keyword-anchored declaration names: the generic capture above is ambiguous when
+  // one decl rule is shared across kinds (a `class` name vs a `function` name look
+  // identical). Anchoring on the keyword token gives each kind its own capture, and
+  // reaches names with no `name` field (a bare type-alias name). Emitted later, wins.
+  if (identSnake && nameFieldsByRule.length > 0) {
+    const seenKw = new Set<string>();
+    const kwLines: string[] = [];
+    for (const nf of nameFieldsByRule) {
+      const key = `${nf.rule} ${nf.keyword} ${nf.capture}`;
+      if (seenKw.has(key)) continue;
+      seenKw.add(key);
+      kwLines.push(`(${nf.rule} ${jsString(nf.keyword)} (${identSnake}) ${nf.capture})`);
+    }
+    if (kwLines.length > 0) {
+      out.push(';; Declaration names, keyword-anchored (disambiguates shared decl rules).');
+      out.push(...kwLines);
+      out.push('');
+    }
+  }
+
   if (identSnake) {
-    const typeRuleSnakes = [...new Set(
-      grammar.rules.filter(r => r.flags.includes('type')).map(r => ctx.ruleSnake.get(r.name)!),
-    )].filter(Boolean);
+    const typeFlagged = new Set(grammar.rules.filter(r => r.flags.includes('type')).map(r => r.name));
+    const typeRuleSnakes = [...new Set([...typeFlagged].map(n => ctx.ruleSnake.get(n)!))].filter(Boolean);
     if (typeRuleSnakes.length > 0) {
-      out.push(';; Type-reference identifiers (inside a type node) → @type.');
+      out.push(';; Type-reference identifiers (inside a type node) -> @type.');
       for (const ts of typeRuleSnakes) out.push(`(${ts} (${identSnake}) @type)`);
+      out.push('');
+    }
+
+    // ── Structural member / type-param / property-access captures (derived from
+    //    rule SHAPE; the tree-sitter analogue of gen-tm's per-position inference) ──
+    const tokenNames = new Set(grammar.tokens.map(t => t.name));
+    const identName = identTok ? identTok.name : '';
+    const snake = (n: string) => ctx.ruleSnake.get(n);
+    const struct: string[] = [];
+    // type parameters: identifiers inside `< … >` whose rule is not already a type rule
+    for (const n of angleTypeRules(grammar)) {
+      if (typeFlagged.has(n)) continue; // type arguments already covered above
+      const s = snake(n); if (s) struct.push(`(${s} (${identSnake}) @type)`);
+    }
+    // member-key (property-name) rules → @property
+    const propRules = propertyNameRules(grammar, identName, tokenNames);
+    for (const n of propRules) { const s = snake(n); if (s) struct.push(`(${s} (${identSnake}) @property)`); }
+    // type-object member keys → @property
+    for (const n of typeMemberRules(grammar)) { const s = snake(n); if (s) struct.push(`(${s} (${identSnake}) @property)`); }
+    // property-access tail: obj.prop → @property (only when the grammar has `.` access)
+    const exprRuleName = [...ctx.prattRules][0];
+    const exprSnake = exprRuleName ? snake(exprRuleName) : null;
+    if (exprSnake && hasPropertyAccess(grammar, identName)) struct.push(`(${exprSnake} (${exprSnake}) (${identSnake}) @property)`);
+    if (struct.length > 0) {
+      out.push(';; Structural member / type-param / property-access captures.');
+      out.push(...struct);
+      out.push('');
+    }
+
+    // Enum-like value members override the member-key → @property capture (later, wins).
+    const valueMems = valueMemberRules(grammar, propRules);
+    if (valueMems.size > 0) {
+      out.push(';; Enum-like value members (override member-key, which would say @property).');
+      for (const [ruleName, nameRule] of valueMems) {
+        const rs = snake(ruleName), ns = snake(nameRule);
+        if (rs && ns) out.push(`(${rs} (${ns} (${identSnake}) @variable))`);
+      }
       out.push('');
     }
   }
@@ -1052,8 +1108,9 @@ function chunk<T>(arr: T[], size: number): T[][] {
 interface NameFieldPlan {
   /** the exact identifier ref nodes to wrap in field('name', …) */
   nodes: Set<RuleExpr>;
-  /** per-rule capture for the standard `(rule name: (ident) @cap)` query */
-  byRule: { rule: string; capture: string }[];
+  /** per-rule capture for the standard `(rule name: (ident) @cap)` query, with the
+   *  triggering keyword so highlights.scm can disambiguate shared decl rules. */
+  byRule: { rule: string; capture: string; keyword: string }[];
 }
 
 /**
@@ -1073,7 +1130,7 @@ function collectNameFields(grammar: CstGrammar): NameFieldPlan {
   const identName = grammar.tokens.find(t => t.identifier)?.name;
   const ruleSnake = new Map(grammar.rules.map(r => [r.name, toSnake(r.name)]));
   const nodes = new Set<RuleExpr>();
-  const byRule: { rule: string; capture: string }[] = [];
+  const byRule: { rule: string; capture: string; keyword: string }[] = [];
 
   function inferCapture(keyword: string): string | null {
     const scope = grammar.scopeOverrides.get(keyword)?.[0];
@@ -1093,6 +1150,7 @@ function collectNameFields(grammar: CstGrammar): NameFieldPlan {
   // Is this item a "skippable" decoration between the keyword and the name —
   // a non-keyword literal (`*`) or an optional/group wrapping one (`opt('*')`)?
   function isSkippableModifier(item: RuleExpr): boolean {
+    if (item.type === 'not') return true; // zero-width lookahead between keyword and name (e.g. type-alias)
     if (item.type === 'literal') return !isKeywordLiteral(item.value);
     if (item.type === 'quantifier' || item.type === 'group') {
       const b = item.body;
@@ -1114,7 +1172,7 @@ function collectNameFields(grammar: CstGrammar): NameFieldPlan {
         const ident = isIdentRef(b);
         if (ident) {
           nodes.add(ident);
-          byRule.push({ rule: ruleSnake.get(ruleName)!, capture: cap });
+          byRule.push({ rule: ruleSnake.get(ruleName)!, capture: cap, keyword: a.value });
           break;
         }
         if (isSkippableModifier(b)) continue; // e.g. '*' or opt('*')
@@ -1130,6 +1188,140 @@ function collectNameFields(grammar: CstGrammar): NameFieldPlan {
   }
   for (const rule of grammar.rules) walk(rule.body, rule.name);
   return { nodes, byRule };
+}
+
+// ── Structural-role detectors (tree-sitter analogues of gen-tm's per-position
+//    scope inference). Each derives a rule's role from its grammar SHAPE — never a
+//    hardcoded rule name — so highlights.scm can capture that node's identifiers. ──
+
+/** Top-level alternative branches of a rule body, each as a flat item list. */
+function ruleBranches(body: RuleExpr): RuleExpr[][] {
+  const seqItems = (e: RuleExpr): RuleExpr[] => (e.type === 'seq' ? e.items : [e]);
+  if (body.type === 'alt') return body.items.map(seqItems);
+  return [seqItems(body)];
+}
+
+/** Rules whose elements are separated/placed inside `< … >` — type params and args. */
+function angleTypeRules(grammar: CstGrammar): Set<string> {
+  const out = new Set<string>();
+  const walk = (e: RuleExpr): void => {
+    if (e.type === 'seq') {
+      for (let i = 0; i < e.items.length; i++) {
+        if (e.items[i].type === 'literal' && (e.items[i] as { value: string }).value === '<') {
+          for (let j = i + 1; j < e.items.length; j++) {
+            const s = e.items[j];
+            if (s.type === 'literal' && (s as { value: string }).value === '>') break;
+            if (s.type === 'sep' && s.element.type === 'ref') out.add(s.element.name);
+            else if (s.type === 'ref') out.add(s.name);
+          }
+        }
+      }
+      e.items.forEach(walk);
+    } else if (e.type === 'alt') e.items.forEach(walk);
+    else if (e.type === 'quantifier' || e.type === 'group' || e.type === 'not') walk(e.body);
+    else if (e.type === 'sep') walk(e.element);
+  };
+  for (const r of grammar.rules) walk(r.body);
+  return out;
+}
+
+/** A single "name form": a token ref or a computed `[ Expr ]`. */
+function isNameForm(item: RuleExpr, tokenNames: Set<string>): boolean {
+  if (item.type === 'ref' && tokenNames.has(item.name)) return true;
+  if (item.type === 'seq' && item.items.length === 3) {
+    const [a, , c] = item.items;
+    return a.type === 'literal' && a.value === '[' && c.type === 'literal' && c.value === ']';
+  }
+  return false;
+}
+
+/** Rules that are a pure alternation of name forms — the PropertyName / member-key rule. */
+function propertyNameRules(grammar: CstGrammar, identName: string, tokenNames: Set<string>): Set<string> {
+  const out = new Set<string>();
+  for (const r of grammar.rules) {
+    if (r.body.type !== 'alt') continue; // a property-name rule is an ALTERNATION of name forms
+    const items = r.body.items;          // each alternative is one name form (a computed `[Expr]` is a seq → isNameForm handles it)
+    if (items.length < 2) continue;
+    const allName = items.every(it => isNameForm(it, tokenNames));
+    const hasIdent = items.some(it => it.type === 'ref' && it.name === identName);
+    if (allName && hasIdent) out.add(r.name);
+  }
+  return out;
+}
+
+/** Rule(s) that are the member-list element inside a `{ … }` within a `type`-flagged
+ *  rule → type-object member keys. Members may be placed by `sep`, a `*`/`+` repetition,
+ *  or a bare ref, so collect the list element(s) directly between the braces. */
+function typeMemberRules(grammar: CstGrammar): Set<string> {
+  const ruleNames = new Set(grammar.rules.map(r => r.name));
+  const typeFlagged = new Set(grammar.rules.filter(r => r.flags.includes('type')).map(r => r.name));
+  const out = new Set<string>();
+  // a member-list element: a rule ref directly inside `{ … }`, or one repeated via sep/quantifier.
+  const addMember = (e: RuleExpr): void => {
+    if (e.type === 'ref') out.add(e.name);
+    else if (e.type === 'sep') addMember(e.element);
+    else if (e.type === 'quantifier' || e.type === 'group') addMember(e.body);
+    else if (e.type === 'seq') e.items.forEach(addMember);
+  };
+  const walk = (e: RuleExpr): void => {
+    if (e.type === 'seq') {
+      for (let i = 0; i < e.items.length; i++) {
+        if (e.items[i].type === 'literal' && (e.items[i] as { value: string }).value === '{') {
+          for (let j = i + 1; j < e.items.length; j++) {
+            const it = e.items[j];
+            if (it.type === 'literal' && (it as { value: string }).value === '}') break;
+            addMember(it);
+          }
+        }
+      }
+      e.items.forEach(walk);
+    } else if (e.type === 'alt') e.items.forEach(walk);
+    else if (e.type === 'quantifier' || e.type === 'group' || e.type === 'not') walk(e.body);
+    else if (e.type === 'sep') walk(e.element);
+  };
+  for (const r of grammar.rules) if (typeFlagged.has(r.name)) walk(r.body);
+  // keep only RULE members that aren't themselves type rules (a type ref isn't a member key).
+  return new Set([...out].filter(n => ruleNames.has(n) && !typeFlagged.has(n)));
+}
+
+/** Rules whose EVERY branch is `[ nameRule, opt(…) ]` → exclusively value members
+ *  (an enum body), as opposed to a class body that merely has such a branch among
+ *  methods/accessors. Maps rule → its nameRule. */
+function valueMemberRules(grammar: CstGrammar, propNameRules: Set<string>): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const r of grammar.rules) {
+    const branches = ruleBranches(r.body);
+    if (branches.length === 0) continue;
+    let nameRule: string | null = null;
+    const allValue = branches.every(b => {
+      if (b.length >= 1 && b[0].type === 'ref' && propNameRules.has(b[0].name)
+          && b.slice(1).every(x => x.type === 'quantifier' || x.type === 'group')) {
+        nameRule = b[0].name;
+        return true;
+      }
+      return false;
+    });
+    if (allValue && nameRule) out.set(r.name, nameRule);
+  }
+  return out;
+}
+
+/** Does the grammar have a `.`/`?.` property access (literal followed by the identifier token)? */
+function hasPropertyAccess(grammar: CstGrammar, identName: string): boolean {
+  let found = false;
+  const walk = (e: RuleExpr): void => {
+    if (e.type === 'seq') {
+      for (let i = 0; i < e.items.length - 1; i++) {
+        const a = e.items[i], b = e.items[i + 1];
+        if (a.type === 'literal' && (a.value === '.' || a.value === '?.') && b.type === 'ref' && b.name === identName) found = true;
+      }
+      e.items.forEach(walk);
+    } else if (e.type === 'alt') e.items.forEach(walk);
+    else if (e.type === 'quantifier' || e.type === 'group' || e.type === 'not') walk(e.body);
+    else if (e.type === 'sep') walk(e.element);
+  };
+  for (const r of grammar.rules) walk(r.body);
+  return found;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
