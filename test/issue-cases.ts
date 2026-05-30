@@ -104,27 +104,35 @@ export const tests: TestCase[] = [
   },
 
   // ── Regex: control escape ──
+  // The regex-internals sub-grammar scopes the whole `\cX` control escape as
+  // constant.character.control.regexp (matching the official grammar), rather
+  // than the old coarse `\c`-only constant.character.escape.
   {
     label: '#1063: /\\cJ/ control char escape',
     input: '/\\cJ/',
     checks: [
-      { text: '\\c', scope: 'constant.character.escape' },
+      { text: '\\cJ', scope: 'constant.character.control' },
     ],
   },
   {
     label: '#1063: /\\cj/ lowercase control char',
     input: '/\\cj/',
+    // `\cj` (lowercase) is NOT a valid control escape, so `\c` is consumed as a
+    // plain backslash escape and `j` is a literal — matching the official grammar.
     checks: [
-      { text: '\\c', scope: 'constant.character.escape' },
+      { text: '\\c', scope: 'constant.character.escape.backslash' },
     ],
   },
 
   // ── Regex: character class escape ──
+  // The character-class sub-grammar splits `[a\-b]` into the set delimiters, the
+  // bare `a`, and the `\-b` range (constant.other.character-class.range.regexp,
+  // a constant.other.character-class.* scope) — the official grammar's structure.
   {
     label: '#804: /[a\\-b]/g char class recognized',
     input: '/[a\\-b]/g',
     checks: [
-      { text: 'a\\-b', scope: 'constant.other.character-class' },
+      { text: '\\-b', scope: 'constant.other.character-class' },
       { text: 'g', scope: 'keyword.other.regexp' },
     ],
   },
@@ -345,7 +353,7 @@ export const tests: TestCase[] = [
     label: 'export default expression',
     input: 'export default 42;',
     checks: [
-      { text: 'export', scope: 'keyword.control.import' },
+      { text: 'export', scope: 'keyword.control.export' },
       { text: 'default', scope: 'keyword.control' },
       { text: '42', scope: 'constant.numeric' },
     ],
@@ -372,7 +380,7 @@ export const tests: TestCase[] = [
     label: 'export type re-export',
     input: "export type { Foo } from 'bar';",
     checks: [
-      { text: 'export', scope: 'keyword.control.import' },
+      { text: 'export', scope: 'keyword.control.export' },
       { text: 'type', scope: 'storage.type.type' },
       { text: 'Foo', scope: 'variable.other' },
     ],
@@ -381,8 +389,8 @@ export const tests: TestCase[] = [
     label: 'export * re-export',
     input: "export * from 'module';",
     checks: [
-      { text: 'export', scope: 'keyword.control.import' },
-      { text: 'from', scope: 'keyword.control.import' },
+      { text: 'export', scope: 'keyword.control.export' },
+      { text: 'from', scope: 'keyword.control.from' },
     ],
   },
   {
@@ -483,11 +491,12 @@ export const tests: TestCase[] = [
     ],
   },
   {
-    label: 'return/break gets keyword.control.flow',
+    label: 'return gets keyword.control.flow, break gets keyword.control.loop',
     input: 'return x; break;',
     checks: [
       { text: 'return', scope: 'keyword.control.flow' },
-      { text: 'break', scope: 'keyword.control.flow' },
+      // `break`/`continue` are loop-control in the official grammar (keyword.control.loop).
+      { text: 'break', scope: 'keyword.control.loop' },
     ],
   },
   {
@@ -626,7 +635,7 @@ export const tests: TestCase[] = [
     input: 'import from from "m";',
     checks: [
       { text: 'from', scope: 'variable.other' },
-      { text: 'from', scope: 'keyword.control.import' },
+      { text: 'from', scope: 'keyword.control.from' },
     ],
   },
   // Contextual operator keywords (`as`/`keyof`/`is`/…): keyword only in operator/type

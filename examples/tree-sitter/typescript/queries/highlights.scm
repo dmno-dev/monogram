@@ -69,24 +69,23 @@
 ;; Keyword, operator, and punctuation literals.
 [
   "implements" "interface" "namespace" "protected" "debugger" "readonly" "abstract" "override"
-  "accessor" "private" "declare" "extends" "module" "public" "static" "unique"
-  "const" "using" "class" "async" "with" "type" "enum" "meta"
-  "let" "var" "get" "set" "out"
+  "accessor" "default" "private" "declare" "extends" "switch" "export" "module"
+  "public" "static" "unique" "const" "using" "class" "async" "case"
+  "with" "from" "type" "enum" "meta" "let" "var" "get"
+  "set" "out"
 ] @keyword
 [
   "constructor" "function" "=>"
 ] @keyword.function
+"import" @keyword.import
 [
-  "import" "export" "from"
-] @keyword.import
-[
-  "default" "switch" "else" "case" "if"
+  "else" "if"
 ] @keyword.conditional
 [
-  "while" "for" "do" "in" "of"
+  "continue" "while" "break" "for" "do" "in" "of"
 ] @keyword.repeat
 [
-  "continue" "return" "break" "await" "yield"
+  "return" "await" "yield"
 ] @keyword.return
 [
   "finally" "catch" "throw" "try"

@@ -192,11 +192,26 @@ function getScope(overrides: Map<string, string[]>, key: string): string | undef
   return overrides.get(key)?.[0];
 }
 
+// TextMate-convention remaps from a `storage.type.<kind>` declaration keyword to
+// the leaf of the `entity.name.type.<leaf>` it introduces. Most kinds keep their
+// own name (`class`→`class`, `interface`→`interface`, `enum`→`enum`); two follow
+// the established convention of a different leaf: a `type` alias name is
+// `.type.alias`, and a `namespace`/`module` name is `.type.module`. Driven by the
+// scope subtype, not by any specific keyword — a grammar gets the finer name for
+// free by scoping its declaration keyword `storage.type.<kind>`.
+const TYPE_NAME_LEAF: Record<string, string> = { type: 'alias', namespace: 'module', module: 'module' };
+
 function inferIdentScope(keyword: string, scopeOverrides: Map<string, string[]>): string | null {
   const scope = getScope(scopeOverrides, keyword);
   if (!scope) return null;
   if (scope.startsWith('storage.type.function')) return 'entity.name.function';
-  if (scope.startsWith('storage.type.') && scope !== 'storage.type') return 'entity.name.type';
+  if (scope.startsWith('storage.type.') && scope !== 'storage.type') {
+    // Refine to `entity.name.type.<kind>` so themes keying on the full path color
+    // the declared name like the official grammar (class → entity.name.type.class).
+    const kind = scope.slice('storage.type.'.length).split('.')[0];
+    const leaf = TYPE_NAME_LEAF[kind] ?? kind;
+    return leaf ? `entity.name.type.${leaf}` : 'entity.name.type';
+  }
   // Heritage keyword (TextMate convention `*.extends`, e.g. `keyword.other.extends`
   // / `storage.modifier.extends`): the identifier it introduces names a superclass.
   // Scope-convention driven (like the storage.type.* mappings above), not keyed on
@@ -352,8 +367,12 @@ function classifyToken(pattern: string, flags: string[]): { scope: string; isBlo
   }
 
   if (pattern.startsWith('\\d') || pattern.startsWith('[0-9]')) {
-    if (pattern.includes('\\.') || pattern.includes('.')) return { scope: 'constant.numeric.float' };
-    return { scope: 'constant.numeric.integer' };
+    // A `[0-9]`/`\d`-leading token is a base-10 (decimal) numeric. The TextMate
+    // `.decimal`/`.hex`/`.octal`/`.binary` axis names the BASE, not int-vs-float —
+    // an optional fraction/exponent does not change the base — so a single
+    // base-10 token (matching `1`, `1.5`, `1e3` alike) is `constant.numeric.decimal`.
+    // (Named bases get their scope from explicit token annotations.)
+    return { scope: 'constant.numeric.decimal' };
   }
 
   if (pattern.includes('"')) return { scope: 'string.quoted.double' };
@@ -1383,15 +1402,500 @@ function generateRegexLiteralPatterns(
       '1': { name: `punctuation.definition.string.end.regexp.${langName}` },
       '2': { name: `keyword.other.regexp.${langName}` },
     },
+    // The regex BODY is sub-highlighted by the regex-internals sub-grammar
+    // (#regexp), which recurses into groups/assertions. A regex body's grammar
+    // is universal — independent of the host language — so its scopes carry NO
+    // language suffix (the de-facto convention that `*.regexp` syntax scopes are
+    // language-neutral terminals, the way the official grammar emits them).
+    patterns: [{ include: '#regexp' }],
+  };
+
+  // Emit the regex-internals sub-grammar (#regexp + #regex-character-class).
+  Object.assign(result, generateRegexInternalPatterns());
+
+  return result;
+}
+
+/**
+ * Generate the regex-internals sub-grammar — a TM repository fragment that
+ * sub-highlights the BODY of a regex literal. It is emitted because the grammar
+ * declares a `regex`-flagged token (so the host advertises regex literals); the
+ * body grammar itself is the universal ECMAScript-style regex syntax, so the
+ * patterns are language-independent and their scopes carry NO language suffix.
+ *
+ * Two repository entries, mirroring how a hand-written grammar layers this:
+ *   #regexp                — anchors (`^ $ \b`), back-references (`\1`, `\k<n>`),
+ *                            quantifiers (`* + ? {n,m}`), alternation (`|`),
+ *                            assertion groups (`(?=…)`/`(?<=…)`…), capture /
+ *                            non-capture / named groups (`(…)`/`(?:…)`/`(?<n>…)`)
+ *                            and character-class sets (`[…]`). Groups recurse via
+ *                            `#regexp`.
+ *   #regex-character-class — single-char escapes/classes shared between the body
+ *                            and the inside of a `[…]` set: `\d \w …` classes,
+ *                            the `.` wildcard, numeric escapes (`\0nn`/`\xHH`/
+ *                            `\uHHHH`), control escapes (`\cX`) and the catch-all
+ *                            backslash escape (`\.`).
+ */
+function generateRegexInternalPatterns(): Record<string, TmPattern> {
+  // One escaped numeric code-unit: octal `\0nn`, hex `\xHH`, unicode `\uHHHH`.
+  const numericEscape = '\\\\(?:[0-7]{3}|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4})';
+  // A range endpoint inside `[…]`. The leading endpoint may be `.` (any char);
+  // the trailing one excludes `]`/`\` so the class can still close. Capture
+  // groups split the escape KINDS so each endpoint escape keeps its own scope.
+  const rangeStart = `(?:.|(${numericEscape})|(\\\\c[A-Z])|(\\\\.))`;
+  const rangeEnd = `(?:[^\\]\\\\]|(${numericEscape})|(\\\\c[A-Z])|(\\\\.))`;
+
+  // The character-class set `[ … ]` (and negated `[^ … ]`). A range like `a-z`
+  // is highlighted whole; anything else falls through to the shared single-char
+  // escape patterns (#regex-character-class).
+  const characterClassSet: TmPattern = {
+    name: 'constant.other.character-class.set.regexp',
+    begin: '(\\[)(\\^)?',
+    beginCaptures: {
+      '1': { name: 'punctuation.definition.character-class.regexp' },
+      '2': { name: 'keyword.operator.negation.regexp' },
+    },
+    end: '(\\])',
+    endCaptures: {
+      '1': { name: 'punctuation.definition.character-class.regexp' },
+    },
     patterns: [
-      // Character class
-      { begin: '\\[', end: '\\]', name: `constant.other.character-class.regexp.${langName}` },
-      // Escape sequences
-      { match: '\\\\.', name: `constant.character.escape.regexp.${langName}` },
+      {
+        name: 'constant.other.character-class.range.regexp',
+        match: `${rangeStart}\\-${rangeEnd}`,
+        captures: {
+          '1': { name: 'constant.character.numeric.regexp' },
+          '2': { name: 'constant.character.control.regexp' },
+          '3': { name: 'constant.character.escape.backslash.regexp' },
+          '4': { name: 'constant.character.numeric.regexp' },
+          '5': { name: 'constant.character.control.regexp' },
+          '6': { name: 'constant.character.escape.backslash.regexp' },
+        },
+      },
+      { include: '#regex-character-class' },
     ],
   };
 
-  return result;
+  const regexp: TmPattern = {
+    patterns: [
+      // Anchors: \b/\B word boundaries, ^ and $.
+      { name: 'keyword.control.anchor.regexp', match: '\\\\[bB]|\\^|\\$' },
+      // Back-references: numeric \1.. and named \k<name>.
+      {
+        match: '\\\\[1-9]\\d*|\\\\k<([a-zA-Z_$][\\w$]*)>',
+        captures: {
+          '0': { name: 'keyword.other.back-reference.regexp' },
+          '1': { name: 'variable.other.regexp' },
+        },
+      },
+      // Quantifiers: ? + * and {n,m}/{n,}/{,m}/{n} with an optional lazy `?`.
+      {
+        name: 'keyword.operator.quantifier.regexp',
+        match: '[?+*]|\\{(\\d+,\\d+|\\d+,|,\\d+|\\d+)\\}\\??',
+      },
+      // Alternation.
+      { name: 'keyword.operator.or.regexp', match: '\\|' },
+      // Assertion groups: (?=…) (?!…) (?<=…) (?<!…). Recurses into #regexp.
+      {
+        name: 'meta.group.assertion.regexp',
+        begin: '(\\()((\\?=)|(\\?!)|(\\?<=)|(\\?<!))',
+        beginCaptures: {
+          '1': { name: 'punctuation.definition.group.regexp' },
+          '2': { name: 'punctuation.definition.group.assertion.regexp' },
+          '3': { name: 'meta.assertion.look-ahead.regexp' },
+          '4': { name: 'meta.assertion.negative-look-ahead.regexp' },
+          '5': { name: 'meta.assertion.look-behind.regexp' },
+          '6': { name: 'meta.assertion.negative-look-behind.regexp' },
+        },
+        end: '(\\))',
+        endCaptures: { '1': { name: 'punctuation.definition.group.regexp' } },
+        patterns: [{ include: '#regexp' }],
+      },
+      // Capture / non-capture / named groups: (…) (?:…) (?<name>…). Recurses.
+      {
+        name: 'meta.group.regexp',
+        begin: '\\((?:(\\?:)|(?:\\?<([a-zA-Z_$][\\w$]*)>))?',
+        beginCaptures: {
+          '0': { name: 'punctuation.definition.group.regexp' },
+          '1': { name: 'punctuation.definition.group.no-capture.regexp' },
+          '2': { name: 'variable.other.regexp' },
+        },
+        end: '\\)',
+        endCaptures: { '0': { name: 'punctuation.definition.group.regexp' } },
+        patterns: [{ include: '#regexp' }],
+      },
+      // Character-class set `[ … ]`.
+      characterClassSet,
+      // Bare single-char escapes / classes / the `.` wildcard.
+      { include: '#regex-character-class' },
+    ],
+  };
+
+  const regexCharacterClass: TmPattern = {
+    patterns: [
+      // Built-in character classes (\d \w \s … and negations) plus `.`.
+      { name: 'constant.other.character-class.regexp', match: '\\\\[wWsSdDtrnvf]|\\.' },
+      // Numeric escapes: octal \0nn, hex \xHH, unicode \uHHHH.
+      { name: 'constant.character.numeric.regexp', match: '\\\\([0-7]{3}|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4})' },
+      // Control escapes: \cX.
+      { name: 'constant.character.control.regexp', match: '\\\\c[A-Z]' },
+      // Catch-all backslash escape (\n \t \. \/ …).
+      { name: 'constant.character.escape.backslash.regexp', match: '\\\\.' },
+    ],
+  };
+
+  return { regexp, 'regex-character-class': regexCharacterClass };
+}
+
+/**
+ * Generate a JSDoc-body sub-grammar (driven by a `@embed('jsdoc')` block token).
+ *
+ * JSDoc is a documentation convention layered ON a host language, not part of any
+ * one language's syntax — `/** … *​/` blocks carry the same `@tag`/`{type}` grammar
+ * whether they sit above JS, TS, or any other ECMAScript-family source. So the
+ * sub-grammar is derived GENERICALLY from the `embed: 'jsdoc'` hint, not hardcoded
+ * into a particular grammar: the only host-specific bit is the embedded-source scope
+ * suffix (`meta.embedded.block.jsdoc`, `source.embedded.<lang>`), which is woven in
+ * from `langName`. The `.jsdoc` scope names themselves are the host-independent
+ * vocabulary the construct owns.
+ *
+ * Produces three repository entries the block-comment region includes via
+ * `#docblock`:
+ *   - docblock     — block tags (`@param`/`@returns`/`@type`/…), access/symbol-type
+ *                    tags, name/type tags, `@example` (embedded source), inline tags
+ *   - jsdoctype    — `{ … }` brace type-expressions (`{string}`)
+ *   - inline-tags  — `{@link …}` / `{@tutorial …}` inline references
+ *
+ * Returns the repository entries; the caller wires `#docblock` into the block region
+ * and emits the embedded-source content marker. Patterns mirror the official grammar
+ * so the derived scopes are drop-in compatible.
+ */
+function generateJsdocPatterns(langName: string): Record<string, TmPattern> {
+  const src = `source.embedded.${langName}`;
+  // The full block-tag vocabulary (matched as a bare `storage.type.class.jsdoc`
+  // fallback for any recognised tag that the structured patterns above did not
+  // already consume). Kept verbatim so an unknown-but-valid tag still highlights.
+  const allTags =
+    '(?x) (@) (?:abstract|access|alias|api|arg|argument|async|attribute|augments|author|beta|borrows|bubbles ' +
+    '|callback|chainable|class|classdesc|code|config|const|constant|constructor|constructs|copyright ' +
+    '|default|defaultvalue|define|deprecated|desc|description|dict|emits|enum|event|example|exception ' +
+    '|exports?|extends|extension(?:_?for)?|external|externs|file|fileoverview|final|fires|for|func ' +
+    '|function|generator|global|hideconstructor|host|ignore|implements|implicitCast|inherit[Dd]oc ' +
+    '|inner|instance|interface|internal|kind|lends|license|listens|main|member|memberof!?|method ' +
+    '|mixes|mixins?|modifies|module|name|namespace|noalias|nocollapse|nocompile|nosideeffects ' +
+    '|override|overview|package|param|polymer(?:Behavior)?|preserve|private|prop|property|protected ' +
+    '|public|read[Oo]nly|record|require[ds]|returns?|see|since|static|struct|submodule|summary ' +
+    '|suppress|template|this|throws|todo|tutorial|type|typedef|unrestricted|uses|var|variation ' +
+    '|version|virtual|writeOnce|yields?) \\b';
+
+  return {
+    docblock: {
+      patterns: [
+        // @access / @api  →  private|protected|public
+        {
+          match: '(?x)\n((@)(?:access|api))\n\\s+\n(private|protected|public)\n\\b',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'constant.language.access-type.jsdoc' },
+          },
+        },
+        // @author  →  name <email>
+        {
+          match:
+            '(?x)\n((@)author)\n\\s+\n(\n  [^@\\s<>*/]\n  (?:[^@<>*/]|\\*[^/])*\n)\n(?:\n  \\s*\n  (<)\n  ([^>\\s]+)\n  (>)\n)?',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'entity.name.type.instance.jsdoc' },
+            '4': { name: 'punctuation.definition.bracket.angle.begin.jsdoc' },
+            '5': { name: 'constant.other.email.link.underline.jsdoc' },
+            '6': { name: 'punctuation.definition.bracket.angle.end.jsdoc' },
+          },
+        },
+        // @borrows <namepath> as <namepath>
+        {
+          match:
+            '(?x)\n((@)borrows) \\s+\n((?:[^@\\s*/]|\\*[^/])+)    # <that namepath>\n\\s+ (as) \\s+              # as\n((?:[^@\\s*/]|\\*[^/])+)    # <this namepath>',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'entity.name.type.instance.jsdoc' },
+            '4': { name: 'keyword.operator.control.jsdoc' },
+            '5': { name: 'entity.name.type.instance.jsdoc' },
+          },
+        },
+        // @example  →  embedded source until the next tag / end of comment
+        {
+          name: 'meta.example.jsdoc',
+          begin: '((@)example)\\s+',
+          end: '(?=@|\\*/)',
+          beginCaptures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+          },
+          patterns: [
+            { match: '^\\s\\*\\s+' },
+            {
+              contentName: 'constant.other.description.jsdoc',
+              begin: '\\G(<)caption(>)',
+              beginCaptures: {
+                '0': { name: 'entity.name.tag.inline.jsdoc' },
+                '1': { name: 'punctuation.definition.bracket.angle.begin.jsdoc' },
+                '2': { name: 'punctuation.definition.bracket.angle.end.jsdoc' },
+              },
+              end: '(</)caption(>)|(?=\\*/)',
+              endCaptures: {
+                '0': { name: 'entity.name.tag.inline.jsdoc' },
+                '1': { name: 'punctuation.definition.bracket.angle.begin.jsdoc' },
+                '2': { name: 'punctuation.definition.bracket.angle.end.jsdoc' },
+              },
+            },
+            { match: '[^\\s@*](?:[^*]|\\*[^/])*', captures: { '0': { name: src } } },
+          ],
+        },
+        // @kind  →  class|constant|event|…
+        {
+          match:
+            '(?x) ((@)kind) \\s+ (class|constant|event|external|file|function|member|mixin|module|namespace|typedef) \\b',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'constant.language.symbol-type.jsdoc' },
+          },
+        },
+        // @see  →  URL | namepath
+        {
+          match:
+            '(?x)\n((@)see)\n\\s+\n(?:\n  # URL\n  (\n    (?=https?://)\n    (?:[^\\s*]|\\*[^/])+\n  )\n  |\n  # JSDoc namepath\n  (\n    (?!\n      # Avoid matching bare URIs (also acceptable as links)\n      https?://\n      |\n      # Avoid matching {@inline tags}; we match those below\n      (?:\\[[^\\[\\]]*\\])? # Possible description [preceding]{@tag}\n      {@(?:link|linkcode|linkplain|tutorial)\\b\n    )\n    # Matched namepath\n    (?:[^@\\s*/]|\\*[^/])+\n  )\n)',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'variable.other.link.underline.jsdoc' },
+            '4': { name: 'entity.name.type.instance.jsdoc' },
+          },
+        },
+        // @template  →  identifier list (no brace)
+        {
+          match:
+            '(?x)\n((@)template)\n\\s+\n# One or more valid identifiers\n(\n  [A-Za-z_$]         # First character: non-numeric word character\n  [\\w$.\\[\\]]*        # Rest of identifier\n  (?:                # Possible list of additional identifiers\n    \\s* , \\s*\n    [A-Za-z_$]\n    [\\w$.\\[\\]]*\n  )*\n)',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'variable.other.jsdoc' },
+          },
+        },
+        // @template {Type} — brace constraint
+        {
+          begin: '(?x)((@)template)\\s+(?={)',
+          beginCaptures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+          },
+          end: '(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])',
+          patterns: [
+            { include: '#jsdoctype' },
+            { name: 'variable.other.jsdoc', match: '([A-Za-z_$][\\w$.\\[\\]]*)' },
+          ],
+        },
+        // @param/@arg/@member/… name  (no brace type)
+        {
+          match:
+            '(?x)\n(\n  (@)\n  (?:arg|argument|const|constant|member|namespace|param|var)\n)\n\\s+\n(\n  [A-Za-z_$]\n  [\\w$.\\[\\]]*\n)',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'variable.other.jsdoc' },
+          },
+        },
+        // @typedef {Type} Name
+        {
+          begin: '((@)typedef)\\s+(?={)',
+          beginCaptures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+          },
+          end: '(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])',
+          patterns: [
+            { include: '#jsdoctype' },
+            { name: 'entity.name.type.instance.jsdoc', match: '(?:[^@\\s*/]|\\*[^/])+' },
+          ],
+        },
+        // @param {Type} name  (brace type + name, with [optional=default] form)
+        {
+          begin:
+            '((@)(?:arg|argument|const|constant|member|namespace|param|prop|property|var))\\s+(?={)',
+          beginCaptures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+          },
+          end: '(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])',
+          patterns: [
+            { include: '#jsdoctype' },
+            { name: 'variable.other.jsdoc', match: '([A-Za-z_$][\\w$.\\[\\]]*)' },
+            {
+              name: 'variable.other.jsdoc',
+              match:
+                '(?x)\n(\\[)\\s*\n[\\w$]+\n(?:\n  (?:\\[\\])?                                        # Foo[ ].bar properties within an array\n  \\.                                                # Foo.Bar namespaced parameter\n  [\\w$]+\n)*\n(?:\n  \\s*\n  (=)                                                # [foo=bar] Default parameter value\n  \\s*\n  (\n    # The inner regexes are to stop the match early at */ and to not stop at escaped quotes\n    (?>\n      "(?:(?:\\*(?!/))|(?:\\\\(?!"))|[^*\\\\])*?" |                      # [foo="bar"] Double-quoted\n      \'(?:(?:\\*(?!/))|(?:\\\\(?!\'))|[^*\\\\])*?\' |                      # [foo=\'bar\'] Single-quoted\n      \\[ (?:(?:\\*(?!/))|[^*])*? \\] |                                # [foo=[1,2]] Array literal\n      (?:(?:\\*(?!/))|\\s(?!\\s*\\])|\\[.*?(?:\\]|(?=\\*/))|[^*\\s\\[\\]])*   # Everything else\n    )*\n  )\n)?\n\\s*(?:(\\])((?:[^*\\s]|\\*[^\\s/])+)?|(?=\\*/))',
+              captures: {
+                '1': { name: 'punctuation.definition.optional-value.begin.bracket.square.jsdoc' },
+                '2': { name: 'keyword.operator.assignment.jsdoc' },
+                '3': { name: src },
+                '4': { name: 'punctuation.definition.optional-value.end.bracket.square.jsdoc' },
+                '5': { name: 'invalid.illegal.syntax.jsdoc' },
+              },
+            },
+          ],
+        },
+        // @type/@returns/@throws/… {Type}  — brace type only
+        {
+          begin:
+            '(?x)\n(\n  (@)\n  (?:define|enum|exception|export|extends|lends|implements|modifies\n  |namespace|private|protected|returns?|satisfies|suppress|this|throws|type\n  |yields?)\n)\n\\s+(?={)',
+          beginCaptures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+          },
+          end: '(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])',
+          patterns: [{ include: '#jsdoctype' }],
+        },
+        // @alias/@augments/@extends/… <namepath>  (no brace)
+        {
+          match:
+            '(?x)\n(\n  (@)\n  (?:alias|augments|callback|constructs|emits|event|fires|exports?\n  |extends|external|function|func|host|lends|listens|interface|memberof!?\n  |method|module|mixes|mixin|name|requires|see|this|typedef|uses)\n)\n\\s+\n(\n  (?:\n    [^{}@\\s*] | \\*[^/]\n  )+\n)',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'entity.name.type.instance.jsdoc' },
+          },
+        },
+        // @default/@license/@version  →  quoted string value
+        {
+          contentName: 'variable.other.jsdoc',
+          begin: '((@)(?:default(?:value)?|license|version))\\s+(([\'\'"]))',
+          beginCaptures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'variable.other.jsdoc' },
+            '4': { name: 'punctuation.definition.string.begin.jsdoc' },
+          },
+          end: '(\\3)|(?=$|\\*/)',
+          endCaptures: {
+            '0': { name: 'variable.other.jsdoc' },
+            '1': { name: 'punctuation.definition.string.end.jsdoc' },
+          },
+        },
+        // @default/@license/@version  →  bare value
+        {
+          match:
+            '((@)(?:default(?:value)?|license|tutorial|variation|version))\\s+([^\\s*]+)',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+            '3': { name: 'variable.other.jsdoc' },
+          },
+        },
+        // Any recognised tag name (bare) — fallback so the keyword still colors.
+        {
+          name: 'storage.type.class.jsdoc',
+          match: allTags,
+          captures: { '1': { name: 'punctuation.definition.block.tag.jsdoc' } },
+        },
+        // Inline `{@link …}` references anywhere in the body.
+        { include: '#inline-tags' },
+        // Unknown `@foo` tag followed by whitespace.
+        {
+          match: '((@)(?:[_$[:alpha:]][_$[:alnum:]]*))(?=\\s+)',
+          captures: {
+            '1': { name: 'storage.type.class.jsdoc' },
+            '2': { name: 'punctuation.definition.block.tag.jsdoc' },
+          },
+        },
+      ],
+    },
+
+    // `{ Type }` brace type-expression — the curly delimiters + the inner type.
+    jsdoctype: {
+      patterns: [
+        {
+          contentName: 'entity.name.type.instance.jsdoc',
+          begin: '\\G({)',
+          beginCaptures: {
+            '0': { name: 'entity.name.type.instance.jsdoc' },
+            '1': { name: 'punctuation.definition.bracket.curly.begin.jsdoc' },
+          },
+          end: '((}))\\s*|(?=\\*/)',
+          endCaptures: {
+            '1': { name: 'entity.name.type.instance.jsdoc' },
+            '2': { name: 'punctuation.definition.bracket.curly.end.jsdoc' },
+          },
+          patterns: [{ include: '#brackets' }],
+        },
+      ],
+    },
+
+    // Inline `{@link …}` / `{@tutorial …}` references.
+    'inline-tags': {
+      patterns: [
+        {
+          name: 'constant.other.description.jsdoc',
+          match:
+            '(\\[)[^\\]]+(\\])(?={@(?:link|linkcode|linkplain|tutorial))',
+          captures: {
+            '1': { name: 'punctuation.definition.bracket.square.begin.jsdoc' },
+            '2': { name: 'punctuation.definition.bracket.square.end.jsdoc' },
+          },
+        },
+        {
+          name: 'entity.name.type.instance.jsdoc',
+          begin: '({)((@)(?:link(?:code|plain)?|tutorial))\\s*',
+          beginCaptures: {
+            '1': { name: 'punctuation.definition.bracket.curly.begin.jsdoc' },
+            '2': { name: 'storage.type.class.jsdoc' },
+            '3': { name: 'punctuation.definition.inline.tag.jsdoc' },
+          },
+          end: '}|(?=\\*/)',
+          endCaptures: { '0': { name: 'punctuation.definition.bracket.curly.end.jsdoc' } },
+          patterns: [
+            {
+              match: '\\G((?=https?://)(?:[^|}\\s*]|\\*[/])+)(\\|)?',
+              captures: {
+                '1': { name: 'variable.other.link.underline.jsdoc' },
+                '2': { name: 'punctuation.separator.pipe.jsdoc' },
+              },
+            },
+            {
+              match: '\\G((?:[^{}@\\s|*]|\\*[^/])+)(\\|)?',
+              captures: {
+                '1': { name: 'variable.other.description.jsdoc' },
+                '2': { name: 'punctuation.separator.pipe.jsdoc' },
+              },
+            },
+          ],
+        },
+      ],
+    },
+
+    // `{ … }` brace-type body: nested brackets, kept shallow (matches the official
+    // `#brackets` helper used inside `jsdoctype`).
+    brackets: {
+      patterns: [
+        {
+          begin: '{',
+          beginCaptures: { '0': { name: 'punctuation.definition.bracket.curly.begin.jsdoc' } },
+          end: '}|(?=\\*/)',
+          endCaptures: { '0': { name: 'punctuation.definition.bracket.curly.end.jsdoc' } },
+          patterns: [{ include: '#brackets' }],
+        },
+        {
+          begin: '\\[',
+          beginCaptures: { '0': { name: 'punctuation.definition.bracket.square.begin.jsdoc' } },
+          end: '\\]|(?=\\*/)',
+          endCaptures: { '0': { name: 'punctuation.definition.bracket.square.end.jsdoc' } },
+          patterns: [{ include: '#brackets' }],
+        },
+      ],
+    },
+  };
 }
 
 // ── Declaration pattern detection ──
@@ -1849,19 +2353,42 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
         begin: beginDelim,
         end: endDelim,
       };
-      // @embed(lang) — embedded language inside the block
-      // Use contentName to mark the embedded region.
-      // Avoid `include: source.X` since vscode-textmate skips the entire
-      // begin/end rule when an included grammar fails to resolve.
+      // @embed(lang) — embedded language inside the block.
+      // Mark the region with `meta.embedded.block.<lang>` (a content scope, kept
+      // even when a real sub-grammar is generated so the embedded-region marker
+      // survives). Avoid `include: source.X` since vscode-textmate skips the
+      // entire begin/end rule when an included grammar fails to resolve.
       if (tok.embed) {
         blockEntry.contentName = `meta.embedded.block.${tok.embed}`;
+        // For embeds we can DERIVE a sub-grammar for, emit one and inject it into
+        // the block region instead of leaving the body a single flat token. The
+        // dispatch is keyed on the language-agnostic `embed` hint, so the host
+        // grammar (JS, TS, …) needn't know anything about the embedded language.
+        if (tok.embed === 'jsdoc') {
+          const jsdoc = generateJsdocPatterns(langName);
+          for (const [jk, jv] of Object.entries(jsdoc)) repository[jk] = jv;
+          // The comment delimiters get the punctuation scope (official parity);
+          // the `#docblock` sub-grammar then highlights tags / type-expressions.
+          const commentPunct = `punctuation.definition.comment.${langName}`;
+          blockEntry.beginCaptures = { '0': { name: commentPunct } };
+          blockEntry.endCaptures = { '0': { name: commentPunct } };
+          blockEntry.patterns = [{ include: '#docblock' }];
+        }
       }
       repository[key] = blockEntry;
       topPatterns.push({ include: `#${key}` });
 
     } else {
+      // The bare-identifier catch-all is scoped `variable.other.readwrite` — the
+      // TextMate convention for a mutable variable *reference* (what hand-written
+      // grammars use as their identifier default). `variable.other` alone is the
+      // internal sentinel that *identifies* the identifier token (see identToken
+      // above); the EMITTED scope refines it to the readwrite leaf so themes that
+      // key on the full path color it like the official grammar. Same family
+      // (`variable`) → correctness is unchanged; only the path is finer.
+      const emittedScope = tok === identToken ? `${scope}.readwrite` : scope;
       repository[key] = {
-        name: `${scope}.${langName}`,
+        name: `${emittedScope}.${langName}`,
         // The bare-identifier rule must scope non-ASCII names too (`Ω`, Cyrillic `А`).
         match: tok === identToken ? identPattern : tok.pattern,
       };

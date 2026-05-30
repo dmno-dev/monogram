@@ -154,9 +154,6 @@
       "include": "#scope-keyword-control-import"
     },
     {
-      "include": "#scope-keyword-control-import-from"
-    },
-    {
       "include": "#scope-keyword-control-loop"
     },
     {
@@ -169,10 +166,19 @@
       "include": "#scope-keyword-control-conditional"
     },
     {
+      "include": "#scope-keyword-control-switch"
+    },
+    {
       "include": "#scope-keyword-control-trycatch"
     },
     {
       "include": "#scope-keyword-control"
+    },
+    {
+      "include": "#scope-keyword-control-export"
+    },
+    {
+      "include": "#scope-keyword-control-from-from"
     },
     {
       "include": "#scope-storage-modifier"
@@ -214,7 +220,10 @@
       "include": "#scope-storage-type-function-arrow"
     },
     {
-      "include": "#scope-constant-language-boolean"
+      "include": "#scope-constant-language-boolean-true"
+    },
+    {
+      "include": "#scope-constant-language-boolean-false"
     },
     {
       "include": "#scope-constant-language-null"
@@ -223,7 +232,10 @@
       "include": "#scope-support-type-primitive"
     },
     {
-      "include": "#scope-variable-language"
+      "include": "#scope-variable-language-this"
+    },
+    {
+      "include": "#scope-variable-language-super"
     },
     {
       "include": "#scope-support-variable"
@@ -460,13 +472,165 @@
       },
       "patterns": [
         {
-          "begin": "\\[",
-          "end": "\\]",
-          "name": "constant.other.character-class.regexp.typescript"
+          "include": "#regexp"
+        }
+      ]
+    },
+    "regexp": {
+      "patterns": [
+        {
+          "name": "keyword.control.anchor.regexp",
+          "match": "\\\\[bB]|\\^|\\$"
         },
         {
-          "match": "\\\\.",
-          "name": "constant.character.escape.regexp.typescript"
+          "match": "\\\\[1-9]\\d*|\\\\k<([a-zA-Z_$][\\w$]*)>",
+          "captures": {
+            "0": {
+              "name": "keyword.other.back-reference.regexp"
+            },
+            "1": {
+              "name": "variable.other.regexp"
+            }
+          }
+        },
+        {
+          "name": "keyword.operator.quantifier.regexp",
+          "match": "[?+*]|\\{(\\d+,\\d+|\\d+,|,\\d+|\\d+)\\}\\??"
+        },
+        {
+          "name": "keyword.operator.or.regexp",
+          "match": "\\|"
+        },
+        {
+          "name": "meta.group.assertion.regexp",
+          "begin": "(\\()((\\?=)|(\\?!)|(\\?<=)|(\\?<!))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.group.regexp"
+            },
+            "2": {
+              "name": "punctuation.definition.group.assertion.regexp"
+            },
+            "3": {
+              "name": "meta.assertion.look-ahead.regexp"
+            },
+            "4": {
+              "name": "meta.assertion.negative-look-ahead.regexp"
+            },
+            "5": {
+              "name": "meta.assertion.look-behind.regexp"
+            },
+            "6": {
+              "name": "meta.assertion.negative-look-behind.regexp"
+            }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.group.regexp"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#regexp"
+            }
+          ]
+        },
+        {
+          "name": "meta.group.regexp",
+          "begin": "\\((?:(\\?:)|(?:\\?<([a-zA-Z_$][\\w$]*)>))?",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.group.regexp"
+            },
+            "1": {
+              "name": "punctuation.definition.group.no-capture.regexp"
+            },
+            "2": {
+              "name": "variable.other.regexp"
+            }
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.group.regexp"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#regexp"
+            }
+          ]
+        },
+        {
+          "name": "constant.other.character-class.set.regexp",
+          "begin": "(\\[)(\\^)?",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.character-class.regexp"
+            },
+            "2": {
+              "name": "keyword.operator.negation.regexp"
+            }
+          },
+          "end": "(\\])",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.character-class.regexp"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.other.character-class.range.regexp",
+              "match": "(?:.|(\\\\(?:[0-7]{3}|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}))|(\\\\c[A-Z])|(\\\\.))\\-(?:[^\\]\\\\]|(\\\\(?:[0-7]{3}|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}))|(\\\\c[A-Z])|(\\\\.))",
+              "captures": {
+                "1": {
+                  "name": "constant.character.numeric.regexp"
+                },
+                "2": {
+                  "name": "constant.character.control.regexp"
+                },
+                "3": {
+                  "name": "constant.character.escape.backslash.regexp"
+                },
+                "4": {
+                  "name": "constant.character.numeric.regexp"
+                },
+                "5": {
+                  "name": "constant.character.control.regexp"
+                },
+                "6": {
+                  "name": "constant.character.escape.backslash.regexp"
+                }
+              }
+            },
+            {
+              "include": "#regex-character-class"
+            }
+          ]
+        },
+        {
+          "include": "#regex-character-class"
+        }
+      ]
+    },
+    "regex-character-class": {
+      "patterns": [
+        {
+          "name": "constant.other.character-class.regexp",
+          "match": "\\\\[wWsSdDtrnvf]|\\."
+        },
+        {
+          "name": "constant.character.numeric.regexp",
+          "match": "\\\\([0-7]{3}|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4})"
+        },
+        {
+          "name": "constant.character.control.regexp",
+          "match": "\\\\c[A-Z]"
+        },
+        {
+          "name": "constant.character.escape.backslash.regexp",
+          "match": "\\\\."
         }
       ]
     },
@@ -474,11 +638,511 @@
       "name": "comment.line.shebang.typescript",
       "match": "^#![^\\n]*"
     },
+    "docblock": {
+      "patterns": [
+        {
+          "match": "(?x)\n((@)(?:access|api))\n\\s+\n(private|protected|public)\n\\b",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "constant.language.access-type.jsdoc"
+            }
+          }
+        },
+        {
+          "match": "(?x)\n((@)author)\n\\s+\n(\n  [^@\\s<>*/]\n  (?:[^@<>*/]|\\*[^/])*\n)\n(?:\n  \\s*\n  (<)\n  ([^>\\s]+)\n  (>)\n)?",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "entity.name.type.instance.jsdoc"
+            },
+            "4": {
+              "name": "punctuation.definition.bracket.angle.begin.jsdoc"
+            },
+            "5": {
+              "name": "constant.other.email.link.underline.jsdoc"
+            },
+            "6": {
+              "name": "punctuation.definition.bracket.angle.end.jsdoc"
+            }
+          }
+        },
+        {
+          "match": "(?x)\n((@)borrows) \\s+\n((?:[^@\\s*/]|\\*[^/])+)    # <that namepath>\n\\s+ (as) \\s+              # as\n((?:[^@\\s*/]|\\*[^/])+)    # <this namepath>",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "entity.name.type.instance.jsdoc"
+            },
+            "4": {
+              "name": "keyword.operator.control.jsdoc"
+            },
+            "5": {
+              "name": "entity.name.type.instance.jsdoc"
+            }
+          }
+        },
+        {
+          "name": "meta.example.jsdoc",
+          "begin": "((@)example)\\s+",
+          "end": "(?=@|\\*/)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            }
+          },
+          "patterns": [
+            {
+              "match": "^\\s\\*\\s+"
+            },
+            {
+              "contentName": "constant.other.description.jsdoc",
+              "begin": "\\G(<)caption(>)",
+              "beginCaptures": {
+                "0": {
+                  "name": "entity.name.tag.inline.jsdoc"
+                },
+                "1": {
+                  "name": "punctuation.definition.bracket.angle.begin.jsdoc"
+                },
+                "2": {
+                  "name": "punctuation.definition.bracket.angle.end.jsdoc"
+                }
+              },
+              "end": "(</)caption(>)|(?=\\*/)",
+              "endCaptures": {
+                "0": {
+                  "name": "entity.name.tag.inline.jsdoc"
+                },
+                "1": {
+                  "name": "punctuation.definition.bracket.angle.begin.jsdoc"
+                },
+                "2": {
+                  "name": "punctuation.definition.bracket.angle.end.jsdoc"
+                }
+              }
+            },
+            {
+              "match": "[^\\s@*](?:[^*]|\\*[^/])*",
+              "captures": {
+                "0": {
+                  "name": "source.embedded.typescript"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "match": "(?x) ((@)kind) \\s+ (class|constant|event|external|file|function|member|mixin|module|namespace|typedef) \\b",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "constant.language.symbol-type.jsdoc"
+            }
+          }
+        },
+        {
+          "match": "(?x)\n((@)see)\n\\s+\n(?:\n  # URL\n  (\n    (?=https?://)\n    (?:[^\\s*]|\\*[^/])+\n  )\n  |\n  # JSDoc namepath\n  (\n    (?!\n      # Avoid matching bare URIs (also acceptable as links)\n      https?://\n      |\n      # Avoid matching {@inline tags}; we match those below\n      (?:\\[[^\\[\\]]*\\])? # Possible description [preceding]{@tag}\n      {@(?:link|linkcode|linkplain|tutorial)\\b\n    )\n    # Matched namepath\n    (?:[^@\\s*/]|\\*[^/])+\n  )\n)",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "variable.other.link.underline.jsdoc"
+            },
+            "4": {
+              "name": "entity.name.type.instance.jsdoc"
+            }
+          }
+        },
+        {
+          "match": "(?x)\n((@)template)\n\\s+\n# One or more valid identifiers\n(\n  [A-Za-z_$]         # First character: non-numeric word character\n  [\\w$.\\[\\]]*        # Rest of identifier\n  (?:                # Possible list of additional identifiers\n    \\s* , \\s*\n    [A-Za-z_$]\n    [\\w$.\\[\\]]*\n  )*\n)",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "variable.other.jsdoc"
+            }
+          }
+        },
+        {
+          "begin": "(?x)((@)template)\\s+(?={)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            }
+          },
+          "end": "(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])",
+          "patterns": [
+            {
+              "include": "#jsdoctype"
+            },
+            {
+              "name": "variable.other.jsdoc",
+              "match": "([A-Za-z_$][\\w$.\\[\\]]*)"
+            }
+          ]
+        },
+        {
+          "match": "(?x)\n(\n  (@)\n  (?:arg|argument|const|constant|member|namespace|param|var)\n)\n\\s+\n(\n  [A-Za-z_$]\n  [\\w$.\\[\\]]*\n)",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "variable.other.jsdoc"
+            }
+          }
+        },
+        {
+          "begin": "((@)typedef)\\s+(?={)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            }
+          },
+          "end": "(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])",
+          "patterns": [
+            {
+              "include": "#jsdoctype"
+            },
+            {
+              "name": "entity.name.type.instance.jsdoc",
+              "match": "(?:[^@\\s*/]|\\*[^/])+"
+            }
+          ]
+        },
+        {
+          "begin": "((@)(?:arg|argument|const|constant|member|namespace|param|prop|property|var))\\s+(?={)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            }
+          },
+          "end": "(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])",
+          "patterns": [
+            {
+              "include": "#jsdoctype"
+            },
+            {
+              "name": "variable.other.jsdoc",
+              "match": "([A-Za-z_$][\\w$.\\[\\]]*)"
+            },
+            {
+              "name": "variable.other.jsdoc",
+              "match": "(?x)\n(\\[)\\s*\n[\\w$]+\n(?:\n  (?:\\[\\])?                                        # Foo[ ].bar properties within an array\n  \\.                                                # Foo.Bar namespaced parameter\n  [\\w$]+\n)*\n(?:\n  \\s*\n  (=)                                                # [foo=bar] Default parameter value\n  \\s*\n  (\n    # The inner regexes are to stop the match early at */ and to not stop at escaped quotes\n    (?>\n      \"(?:(?:\\*(?!/))|(?:\\\\(?!\"))|[^*\\\\])*?\" |                      # [foo=\"bar\"] Double-quoted\n      '(?:(?:\\*(?!/))|(?:\\\\(?!'))|[^*\\\\])*?' |                      # [foo='bar'] Single-quoted\n      \\[ (?:(?:\\*(?!/))|[^*])*? \\] |                                # [foo=[1,2]] Array literal\n      (?:(?:\\*(?!/))|\\s(?!\\s*\\])|\\[.*?(?:\\]|(?=\\*/))|[^*\\s\\[\\]])*   # Everything else\n    )*\n  )\n)?\n\\s*(?:(\\])((?:[^*\\s]|\\*[^\\s/])+)?|(?=\\*/))",
+              "captures": {
+                "1": {
+                  "name": "punctuation.definition.optional-value.begin.bracket.square.jsdoc"
+                },
+                "2": {
+                  "name": "keyword.operator.assignment.jsdoc"
+                },
+                "3": {
+                  "name": "source.embedded.typescript"
+                },
+                "4": {
+                  "name": "punctuation.definition.optional-value.end.bracket.square.jsdoc"
+                },
+                "5": {
+                  "name": "invalid.illegal.syntax.jsdoc"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "begin": "(?x)\n(\n  (@)\n  (?:define|enum|exception|export|extends|lends|implements|modifies\n  |namespace|private|protected|returns?|satisfies|suppress|this|throws|type\n  |yields?)\n)\n\\s+(?={)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            }
+          },
+          "end": "(?=\\s|\\*/|[^{}\\[\\]A-Za-z_$])",
+          "patterns": [
+            {
+              "include": "#jsdoctype"
+            }
+          ]
+        },
+        {
+          "match": "(?x)\n(\n  (@)\n  (?:alias|augments|callback|constructs|emits|event|fires|exports?\n  |extends|external|function|func|host|lends|listens|interface|memberof!?\n  |method|module|mixes|mixin|name|requires|see|this|typedef|uses)\n)\n\\s+\n(\n  (?:\n    [^{}@\\s*] | \\*[^/]\n  )+\n)",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "entity.name.type.instance.jsdoc"
+            }
+          }
+        },
+        {
+          "contentName": "variable.other.jsdoc",
+          "begin": "((@)(?:default(?:value)?|license|version))\\s+(([''\"]))",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "variable.other.jsdoc"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.jsdoc"
+            }
+          },
+          "end": "(\\3)|(?=$|\\*/)",
+          "endCaptures": {
+            "0": {
+              "name": "variable.other.jsdoc"
+            },
+            "1": {
+              "name": "punctuation.definition.string.end.jsdoc"
+            }
+          }
+        },
+        {
+          "match": "((@)(?:default(?:value)?|license|tutorial|variation|version))\\s+([^\\s*]+)",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            },
+            "3": {
+              "name": "variable.other.jsdoc"
+            }
+          }
+        },
+        {
+          "name": "storage.type.class.jsdoc",
+          "match": "(?x) (@) (?:abstract|access|alias|api|arg|argument|async|attribute|augments|author|beta|borrows|bubbles |callback|chainable|class|classdesc|code|config|const|constant|constructor|constructs|copyright |default|defaultvalue|define|deprecated|desc|description|dict|emits|enum|event|example|exception |exports?|extends|extension(?:_?for)?|external|externs|file|fileoverview|final|fires|for|func |function|generator|global|hideconstructor|host|ignore|implements|implicitCast|inherit[Dd]oc |inner|instance|interface|internal|kind|lends|license|listens|main|member|memberof!?|method |mixes|mixins?|modifies|module|name|namespace|noalias|nocollapse|nocompile|nosideeffects |override|overview|package|param|polymer(?:Behavior)?|preserve|private|prop|property|protected |public|read[Oo]nly|record|require[ds]|returns?|see|since|static|struct|submodule|summary |suppress|template|this|throws|todo|tutorial|type|typedef|unrestricted|uses|var|variation |version|virtual|writeOnce|yields?) \\b",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            }
+          }
+        },
+        {
+          "include": "#inline-tags"
+        },
+        {
+          "match": "((@)(?:[_$[:alpha:]][_$[:alnum:]]*))(?=\\s+)",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.block.tag.jsdoc"
+            }
+          }
+        }
+      ]
+    },
+    "jsdoctype": {
+      "patterns": [
+        {
+          "contentName": "entity.name.type.instance.jsdoc",
+          "begin": "\\G({)",
+          "beginCaptures": {
+            "0": {
+              "name": "entity.name.type.instance.jsdoc"
+            },
+            "1": {
+              "name": "punctuation.definition.bracket.curly.begin.jsdoc"
+            }
+          },
+          "end": "((}))\\s*|(?=\\*/)",
+          "endCaptures": {
+            "1": {
+              "name": "entity.name.type.instance.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.bracket.curly.end.jsdoc"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#brackets"
+            }
+          ]
+        }
+      ]
+    },
+    "inline-tags": {
+      "patterns": [
+        {
+          "name": "constant.other.description.jsdoc",
+          "match": "(\\[)[^\\]]+(\\])(?={@(?:link|linkcode|linkplain|tutorial))",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.bracket.square.begin.jsdoc"
+            },
+            "2": {
+              "name": "punctuation.definition.bracket.square.end.jsdoc"
+            }
+          }
+        },
+        {
+          "name": "entity.name.type.instance.jsdoc",
+          "begin": "({)((@)(?:link(?:code|plain)?|tutorial))\\s*",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.bracket.curly.begin.jsdoc"
+            },
+            "2": {
+              "name": "storage.type.class.jsdoc"
+            },
+            "3": {
+              "name": "punctuation.definition.inline.tag.jsdoc"
+            }
+          },
+          "end": "}|(?=\\*/)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.bracket.curly.end.jsdoc"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\G((?=https?://)(?:[^|}\\s*]|\\*[/])+)(\\|)?",
+              "captures": {
+                "1": {
+                  "name": "variable.other.link.underline.jsdoc"
+                },
+                "2": {
+                  "name": "punctuation.separator.pipe.jsdoc"
+                }
+              }
+            },
+            {
+              "match": "\\G((?:[^{}@\\s|*]|\\*[^/])+)(\\|)?",
+              "captures": {
+                "1": {
+                  "name": "variable.other.description.jsdoc"
+                },
+                "2": {
+                  "name": "punctuation.separator.pipe.jsdoc"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "brackets": {
+      "patterns": [
+        {
+          "begin": "{",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.bracket.curly.begin.jsdoc"
+            }
+          },
+          "end": "}|(?=\\*/)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.bracket.curly.end.jsdoc"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#brackets"
+            }
+          ]
+        },
+        {
+          "begin": "\\[",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.bracket.square.begin.jsdoc"
+            }
+          },
+          "end": "\\]|(?=\\*/)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.bracket.square.end.jsdoc"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#brackets"
+            }
+          ]
+        }
+      ]
+    },
     "jsdoc": {
       "name": "comment.block.documentation.typescript",
       "begin": "\\/\\*\\*(?!\\/)",
       "end": "\\*\\/",
-      "contentName": "meta.embedded.block.jsdoc"
+      "contentName": "meta.embedded.block.jsdoc",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.typescript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.typescript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#docblock"
+        }
+      ]
     },
     "tripleslash": {
       "name": "comment.line.triple-slash.typescript",
@@ -494,7 +1158,7 @@
       "end": "\\*\\/"
     },
     "ident": {
-      "name": "variable.other.typescript",
+      "name": "variable.other.readwrite.typescript",
       "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*"
     },
     "hexnumber": {
@@ -514,7 +1178,7 @@
       "match": "[0-9]+(_[0-9]+)*n(?![0-9A-Za-z_$\\\\])"
     },
     "number": {
-      "name": "constant.numeric.float.typescript",
+      "name": "constant.numeric.decimal.typescript",
       "match": "[0-9]+(_[0-9]+)*(?:\\.[0-9]*(_[0-9]+)*)?(?:[eE][+-]?[0-9]+(_[0-9]+)*)?(?![0-9A-Za-z_$\\\\])"
     },
     "string-double": {
@@ -701,7 +1365,10 @@
           "include": "#scope-support-type-primitive"
         },
         {
-          "include": "#scope-constant-language-boolean"
+          "include": "#scope-constant-language-boolean-true"
+        },
+        {
+          "include": "#scope-constant-language-boolean-false"
         },
         {
           "include": "#scope-constant-language-null"
@@ -1085,7 +1752,7 @@
           "name": "storage.type.class.typescript"
         },
         "2": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.class.typescript"
         }
       },
       "patterns": [
@@ -1109,7 +1776,7 @@
           "name": "storage.type.interface.typescript"
         },
         "2": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.interface.typescript"
         }
       },
       "patterns": [
@@ -1148,7 +1815,7 @@
           "name": "storage.type.type.typescript"
         },
         "2": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.alias.typescript"
         }
       },
       "patterns": [
@@ -1162,7 +1829,7 @@
           "include": "$self"
         }
       ],
-      "while": "^(?=\\s*(?:[<,\\[|&(...?:{;\\-.]|(?:is|keyof|typeof|readonly|abstract|new|asserts|extends|infer|true|false|null|undefined|void|this|unique|symbol|import)\\b|//|/\\*|(?!if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|export|from|let|const|var|using|function|constructor|class|interface|type|enum|namespace|module|public|private|protected|static|override|declare|async|accessor|get|set\\b)(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*\\b(?!\\s*[.(])))"
+      "while": "^(?=\\s*(?:[<,\\[|&(...?:{;\\-.]|(?:is|keyof|typeof|readonly|abstract|new|asserts|extends|infer|true|false|null|undefined|void|this|unique|symbol|import)\\b|//|/\\*|(?!if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|export|from|let|const|var|using|function|constructor|class|interface|type|enum|namespace|module|public|private|protected|static|override|declare|async|accessor|get|set\\b)(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*\\b(?!\\s*[.(])))"
     },
     "enum-declaration": {
       "name": "meta.enum.typescript",
@@ -1172,7 +1839,7 @@
           "name": "storage.type.enum.typescript"
         },
         "2": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.enum.typescript"
         }
       },
       "patterns": [
@@ -1193,10 +1860,10 @@
           "name": "storage.type.namespace.typescript"
         },
         "2": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.module.typescript"
         },
         "3": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.module.typescript"
         }
       },
       "patterns": [
@@ -1217,10 +1884,10 @@
           "name": "storage.type.namespace.typescript"
         },
         "2": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.module.typescript"
         },
         "3": {
-          "name": "entity.name.type.typescript"
+          "name": "entity.name.type.module.typescript"
         }
       },
       "patterns": [
@@ -1320,7 +1987,7 @@
       }
     },
     "import-export-all": {
-      "match": "\\b(export|import)\\s+(\\*)",
+      "match": "\\b(import)\\s+(\\*)",
       "captures": {
         "1": {
           "name": "keyword.control.import.typescript"
@@ -1471,7 +2138,7 @@
           "name": "keyword.operator.expression.is.typescript"
         }
       },
-      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
+      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
       "patterns": [
         {
           "include": "#type-inner"
@@ -1486,7 +2153,7 @@
           "name": "keyword.operator.expression.keyof.typescript"
         }
       },
-      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
+      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
       "patterns": [
         {
           "include": "#type-inner"
@@ -1501,7 +2168,7 @@
           "name": "keyword.other.extends.extends.typescript"
         }
       },
-      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
+      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
       "patterns": [
         {
           "include": "#type-inner"
@@ -1516,7 +2183,7 @@
           "name": "keyword.operator.expression.as.typescript"
         }
       },
-      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
+      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
       "patterns": [
         {
           "include": "#type-inner"
@@ -1531,7 +2198,7 @@
           "name": "keyword.other.extends.implements.typescript"
         }
       },
-      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
+      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
       "patterns": [
         {
           "include": "#type-inner"
@@ -1546,7 +2213,7 @@
           "name": "keyword.operator.expression.satisfies.typescript"
         }
       },
-      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
+      "end": "(?=[)}{\\],;=>]|\\b(?:is|keyof|extends|as|implements|satisfies|if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|import|export|from|typeof|instanceof|new|delete|void|asserts|infer)\\b)",
       "patterns": [
         {
           "include": "#type-inner"
@@ -1567,7 +2234,7 @@
           "name": "keyword.operator.type.annotation.typescript"
         }
       },
-      "end": "(?=[=;,])|^\\s*(?=if|else|switch|case|default|for|while|do|in|of|return|break|continue|await|yield|try|catch|finally|throw|debugger|with|export|from|let|const|var|using|function|constructor|class|interface|type|enum|namespace|module|public|private|protected|static|override|declare|async|accessor|get|set)\\b",
+      "end": "(?=[=;,])|^\\s*(?=if|else|switch|case|default|for|while|do|in|of|break|continue|return|await|yield|try|catch|finally|throw|debugger|with|export|from|let|const|var|using|function|constructor|class|interface|type|enum|namespace|module|public|private|protected|static|override|declare|async|accessor|get|set)\\b",
       "patterns": [
         {
           "include": "#type-inner"
@@ -1629,9 +2296,13 @@
       "match": "\\b(extends|implements)\\b",
       "name": "keyword.other.extends.typescript"
     },
-    "scope-constant-language-boolean": {
-      "match": "\\b(true|false)\\b",
-      "name": "constant.language.boolean.typescript"
+    "scope-constant-language-boolean-true": {
+      "match": "\\b(true)\\b",
+      "name": "constant.language.boolean.true.typescript"
+    },
+    "scope-constant-language-boolean-false": {
+      "match": "\\b(false)\\b",
+      "name": "constant.language.boolean.false.typescript"
     },
     "scope-constant-language-null": {
       "match": "\\b(null|undefined)\\b",
@@ -1641,36 +2312,36 @@
       "match": "\\b(void|symbol|string|number|boolean|object|bigint|any|unknown|never)\\b",
       "name": "support.type.primitive.typescript"
     },
-    "scope-variable-language": {
-      "match": "\\b(this|super)\\b",
-      "name": "variable.language.typescript"
+    "scope-variable-language-this": {
+      "match": "\\b(this)\\b",
+      "name": "variable.language.this.typescript"
     },
     "scope-keyword-other": {
       "match": "\\b(unique|meta|out)\\b",
       "name": "keyword.other.typescript"
     },
     "scope-keyword-control-import": {
-      "match": "\\b(import|export)\\b",
-      "name": "keyword.control.import.typescript"
-    },
-    "scope-keyword-control-import-from": {
-      "match": "\\bfrom\\b(?=\\s*[\"'])",
+      "match": "\\b(import)\\b",
       "name": "keyword.control.import.typescript"
     },
     "scope-keyword-control-loop": {
-      "match": "\\b(in|for|while|do)\\b",
+      "match": "\\b(in|for|while|do|break|continue)\\b",
       "name": "keyword.control.loop.typescript"
     },
     "scope-keyword-control-loop-of": {
       "match": "\\b(of)\\b(?=\\s+[[:alpha:][:digit:]_$\"`({\\[\\-]|\\s*$|\\s*[({\\[\"`/\\-])",
       "name": "keyword.control.loop.typescript"
     },
+    "scope-variable-language-super": {
+      "match": "\\b(super)\\b",
+      "name": "variable.language.super.typescript"
+    },
     "scope-storage-type-class": {
       "match": "\\b(class)\\b",
       "name": "storage.type.class.typescript"
     },
     "scope-keyword-control-flow": {
-      "match": "\\b(yield|await|return|break|continue)\\b",
+      "match": "\\b(yield|await|return)\\b",
       "name": "keyword.control.flow.typescript"
     },
     "scope-storage-type-function": {
@@ -1686,8 +2357,12 @@
       "name": "storage.type.typescript"
     },
     "scope-keyword-control-conditional": {
-      "match": "\\b(if|else|switch|case|default)\\b",
+      "match": "\\b(if|else)\\b",
       "name": "keyword.control.conditional.typescript"
+    },
+    "scope-keyword-control-switch": {
+      "match": "\\b(switch|case|default)\\b",
+      "name": "keyword.control.switch.typescript"
     },
     "scope-keyword-control-trycatch": {
       "match": "\\b(throw|try|catch|finally)\\b",
@@ -1716,6 +2391,14 @@
     "scope-support-variable": {
       "match": "\\b(module|console|window|document|process|require|exports|global|globalThis)\\b",
       "name": "support.variable.typescript"
+    },
+    "scope-keyword-control-export": {
+      "match": "\\b(export)\\b",
+      "name": "keyword.control.export.typescript"
+    },
+    "scope-keyword-control-from-from": {
+      "match": "\\bfrom\\b(?=\\s*[\"'])",
+      "name": "keyword.control.from.typescript"
     },
     "scope-support-class": {
       "match": "\\b(Promise|Array|Map|Set|WeakMap|WeakSet|Error|RegExp|Date|Object|Function|Symbol)\\b",
