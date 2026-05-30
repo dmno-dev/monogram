@@ -10,12 +10,11 @@ All emitted by `node src/cli.ts examples/typescript.ts`. Highlighting for every 
 | CST parser | `createParser` → CST | ✅ 94.9% conformance (3584/3776) |
 | TextMate | `.tmLanguage.json` | ✅ more correct than VS Code on its own bug ledger (`test/highlight-bench.ts`) |
 | VS Code language-config | `.language-configuration.json` | ✅ comments/folding/`/**` match official |
-| tree-sitter | `grammar.js` + `queries/highlights.scm` + `scanner.c` | 🟡 first pass — external C scanner is a scaffold |
-| Lezer | grammar + `styleTags` + JS tokenizer | 🟡 first pass — Pratt→precedence may need hand-tuning |
+| tree-sitter | `grammar.js` + `queries/highlights.scm` + `scanner.c` | ✅ derived highlighter **95.9%** via the same `tsc` oracle (beats official tree-sitter); builds to wasm. Opt-in (local wasm build). |
 | Monarch | Monaco tokenizer JSON | 🟡 first pass — JS-regex bounded (still beats Monaco's capitalization heuristic) |
 | CST node types | TS discriminated union | 🟡 structural — named-field accessors need grammar field labels |
 
-Remaining: finish the tree-sitter C scanner; hand-tune Lezer operator precedence; (optional) add field labels to the grammar DSL for richer AST types.
+Remaining: (optional) add field labels to the grammar DSL for richer AST types. **Lezer was dropped** — Monogram's non-deterministic (backtracking) grammar can't be mechanically derived into Lezer's build-time LR(1) automaton (combinatorial table blowup + unresolvable `<`-ambiguity conflicts); tree-sitter's runtime GLR absorbs it instead.
 
 ## Current State (v2.5)
 

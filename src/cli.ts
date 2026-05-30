@@ -3,7 +3,6 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { generateTmLanguage } from './gen-tm.ts';
 import { generateLanguageConfig } from './gen-vscode-config.ts';
 import { generateTreeSitter } from './gen-treesitter.ts';
-import { generateLezer } from './gen-lezer.ts';
 import { generateMonarch } from './gen-monarch.ts';
 import { generateAstTypes } from './gen-ast-types.ts';
 import type { CstGrammar, RuleExpr } from './types.ts';
@@ -72,14 +71,6 @@ const treeSitter = generateTreeSitter(grammar, langName);
 emit(`tree-sitter/${langName}/grammar.js`, treeSitter.grammarJs);
 emit(`tree-sitter/${langName}/queries/highlights.scm`, treeSitter.highlightsScm);
 emit(`tree-sitter/${langName}/src/scanner.c`, treeSitter.scannerC);
-
-// Lezer (CodeMirror 6): grammar + styleTags + external tokenizer.
-// Namespaced by <name> so multiple grammars coexist (the .grammar was already
-// namespaced; highlight.js/tokens.js now are too).
-const lezer = generateLezer(grammar);
-emit(`lezer/${langName}.grammar`, lezer.grammar);
-emit(`lezer/${langName}.highlight.js`, lezer.styleTags);
-emit(`lezer/${langName}.tokens.js`, lezer.externalTokenizer);
 
 // Monaco Monarch tokenizer
 emit(`${langName}.monarch.json`, JSON.stringify(generateMonarch(grammar), null, 2));

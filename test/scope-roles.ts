@@ -261,12 +261,12 @@ export function isCorrect(v: Verdict): boolean {
 }
 
 // ─── token FAMILIES — the coarse, cross-ecosystem-fair grading axis ─────────────
-// TextMate / tree-sitter / Lezer classify at different granularities, so the
+// TextMate and tree-sitter classify at different granularities, so the
 // multi-grammar README chart grades at the FAMILY level: the bucket where the
 // *meaningful* highlighting errors live (value-painted-as-type, regex-as-operator,
-// keyword-vs-identifier). A coarse-by-design engine (Lezer calls a function decl
-// `variableName`) is NOT penalised — both are the `value` family. Contested roles
-// accept MULTIPLE families so neither reading is wrongly marked.
+// keyword-vs-identifier). A coarse-by-design engine (one that calls a function decl
+// just `variableName`) is NOT penalised — both are the `value` family. Contested
+// roles accept MULTIPLE families so neither reading is wrongly marked.
 export type Family = 'type' | 'value' | 'property' | 'keyword' | 'literal' | 'comment' | 'punct';
 
 /** The single family an oracle role belongs to (used to map engine output too). */

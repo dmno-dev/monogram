@@ -1,26 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  highlight-engines.ts — run the OFFICIAL tree-sitter & Lezer TypeScript
-//  highlighters (and reuse the TextMate path) and reduce each to a neutral token
-//  FAMILY, so the README chart can grade all of them against the same tsc oracle.
+//  highlight-engines.ts — run the OFFICIAL tree-sitter TypeScript highlighter
+//  (and reuse the TextMate path) and reduce each to a neutral token FAMILY, so the
+//  README chart can grade them against the same tsc oracle.
 //
 //  Each engine speaks a different vocabulary — TextMate scopes, tree-sitter
-//  captures, Lezer highlight tags. Every map below is written from that
-//  vocabulary's STANDARD meaning (frozen, auditable, identical spirit to
-//  scope-roles.ts) — never tuned to favour Monogram. Family granularity is
-//  deliberately coarse (type / value / property / keyword / literal / comment):
-//  it is where the meaningful errors live and it is fair to each engine's native
-//  precision (Lezer calling a function decl `variableName` → still `value`).
+//  captures. Every map below is written from that vocabulary's STANDARD meaning
+//  (frozen, auditable, identical spirit to scope-roles.ts) — never tuned to favour
+//  Monogram. Family granularity is deliberately coarse (type / value / property /
+//  keyword / literal / comment): it is where the meaningful errors live and it is
+//  fair to each engine's native precision.
 //
 //  Sources (pinned, vendored):
 //   • tree-sitter grammar : node_modules/@vscode/tree-sitter-wasm (recent ABI)
 //   • tree-sitter query   : test/vendor/treesitter-typescript-highlights.scm
 //                           (official tree-sitter-javascript ecma base + typescript additions)
-//   • Lezer grammar       : @lezer/javascript (TS dialect) + @lezer/highlight
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readFileSync } from 'node:fs';
-import { parser as lezerJs } from '@lezer/javascript';
-import { highlightTree, classHighlighter } from '@lezer/highlight';
 import type { Family } from './scope-roles.ts';
 
 export interface Span { start: number; end: number; family: Family }
@@ -51,38 +47,6 @@ export function scopeFamily(raw: string): Family {
   if (s.startsWith('keyword') || s.startsWith('storage') || s.startsWith('constant.language') || s.startsWith('variable.language')) return 'keyword';
   if (s.startsWith('entity.name.function') || s.startsWith('variable') || s.startsWith('support.function') || s.startsWith('support.variable') || s.startsWith('entity.name') || s.startsWith('entity.other') || s.startsWith('meta.definition')) return 'value';
   return 'punct';
-}
-
-// ── Lezer highlight tag (classHighlighter class) → family ─────────────────────
-// classHighlighter emits `tok-<tagName>` (+ modifier classes like tok-definition).
-const LEZER_FAMILY: Record<string, Family> = {
-  typeName: 'type', className: 'type', tagName: 'type',
-  propertyName: 'property', attributeName: 'property',
-  variableName: 'value', labelName: 'value', namespace: 'value', macroName: 'value', function: 'value',
-  keyword: 'keyword', controlKeyword: 'keyword', operatorKeyword: 'keyword', definitionKeyword: 'keyword',
-  moduleKeyword: 'keyword', modifier: 'keyword', self: 'keyword', null: 'keyword', bool: 'keyword', atom: 'keyword',
-  number: 'literal', integer: 'literal', float: 'literal', string: 'literal', docString: 'literal',
-  character: 'literal', regexp: 'literal', literal: 'literal', unit: 'literal', escape: 'literal',
-  comment: 'comment', lineComment: 'comment', blockComment: 'comment', docComment: 'comment',
-  operator: 'punct', punctuation: 'punct', separator: 'punct', bracket: 'punct',
-  // modifiers we deliberately skip (not a primary class): definition, constant
-};
-function lezerClassesToFamily(classes: string): Family {
-  for (const c of classes.split(/\s+/)) {
-    const name = c.replace(/^tok-/, '');
-    const fam = LEZER_FAMILY[name];
-    if (fam) return fam;
-  }
-  return 'punct';
-}
-
-export function lezerFamilies(code: string): Span[] {
-  const tree = lezerJs.configure({ dialect: 'ts' }).parse(code);
-  const spans: Span[] = [];
-  highlightTree(tree, classHighlighter, (from, to, classes) => {
-    spans.push({ start: from, end: to, family: lezerClassesToFamily(classes) });
-  });
-  return spans; // highlightTree emits in source order
 }
 
 // ── tree-sitter capture → family ──────────────────────────────────────────────
@@ -181,12 +145,11 @@ export function monogramTreesitterFamilies(code: string): Span[] {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const code = 'const x: NS.Foo = bar(Baz); function g(p: number){ return p; } class C { m(): void {} } /* c */ const re = /ab/g;';
   const ts = await loadTreeSitter();
-  const lz = lezerFamilies(code);
   const tk = ts ? treesitterFamilies(code) : [];
-  console.log('token'.padEnd(10) + 'lezer'.padEnd(10) + 'tree-sitter');
-  console.log('─'.repeat(34));
+  console.log('token'.padEnd(12) + 'tree-sitter');
+  console.log('─'.repeat(24));
   for (const m of code.matchAll(/[A-Za-z_$][\w$]*|\/ab\/g/g)) {
     const pos = m.index!;
-    console.log(m[0].slice(0, 9).padEnd(10) + String(familyAt(lz, pos) || '·').padEnd(10) + (ts ? (familyAt(tk, pos) || '·') : 'n/a'));
+    console.log(m[0].slice(0, 11).padEnd(12) + (ts ? (familyAt(tk, pos) || '·') : 'n/a'));
   }
 }

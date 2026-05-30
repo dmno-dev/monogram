@@ -37,7 +37,7 @@ import onig from 'vscode-oniguruma';
 import { R, ROLE_SPEC, gradeScope, isCorrect, normScope, roleFamily, acceptableFamilies } from './scope-roles.ts';
 import type { RoleName, Verdict, Family } from './scope-roles.ts';
 import { tests as issueTests, multiLineTests as issueMultiLine } from './issue-cases.ts';
-import { scopeFamily, lezerFamilies, treesitterFamilies, loadTreeSitter, familyAt, loadMonogramTreeSitter, monogramTreesitterFamilies } from './highlight-engines.ts';
+import { scopeFamily, treesitterFamilies, loadTreeSitter, familyAt, loadMonogramTreeSitter, monogramTreesitterFamilies } from './highlight-engines.ts';
 import type { Span } from './highlight-engines.ts';
 
 const normScopeShort = (s: string): string => (s ? normScope(s) : '(none)');
@@ -575,7 +575,7 @@ function reportByIssue(perInput: InputResult[]): IssueStats {
 }
 
 // ── README auto-generation: cross-ecosystem token-FAMILY accuracy chart ────────
-// One bar per official highlighter (TextMate / tree-sitter / Lezer) plus Monogram,
+// One bar per official highlighter (TextMate / tree-sitter) plus Monogram,
 // all graded at the FAMILY level against the same tsc oracle. See highlight-engines.ts.
 interface EngineScore { name: string; correct: number; total: number }
 
@@ -595,7 +595,6 @@ async function engineFamilyScores(inputs: { name: string; text: string }[], tsOk
   const engines: { name: string; spans: (t: string) => Span[] }[] = [
     { name: 'Monogram (TextMate, derived)', spans: (t) => tmSpans(monogramGrammar, t) },
     { name: 'official TextMate', spans: (t) => tmSpans(officialGrammar, t) },
-    { name: 'official Lezer', spans: lezerFamilies },
   ];
   if (tsOk) engines.splice(2, 0, { name: 'official tree-sitter', spans: treesitterFamilies });
   if (mtsOk) engines.push({ name: 'Monogram (tree-sitter, derived)', spans: monogramTreesitterFamilies });
@@ -642,7 +641,7 @@ function buildBenchMarkdown(scores: EngineScore[], nInputs: number, tsOk: boolea
   out.push('```');
   out.push('');
   const tsNote = tsOk ? '' : ' _(tree-sitter row omitted: its grammar wasm failed to load in this run.)_';
-  out.push(`<sub>Graded over ${nInputs} ambiguity-rich snippets ([\`test/issue-cases.ts\`](test/issue-cases.ts)) against tsc's own parse tree. The three parser-based highlighters (Monogram, tree-sitter, Lezer) cluster well above the hand-written TextMate grammar — that gap is the whole point. Per-engine vocabulary→family maps (frozen, auditable): [\`test/highlight-engines.ts\`](test/highlight-engines.ts). JavaScript: not yet on the bench. Regenerate: \`npm run bench:readme\`.${tsNote}</sub>`);
+  out.push(`<sub>Graded over ${nInputs} ambiguity-rich snippets ([\`test/issue-cases.ts\`](test/issue-cases.ts)) against tsc's own parse tree. The parser-derived highlighters (Monogram, official tree-sitter) sit well above the hand-written TextMate grammar — that gap is the whole point. Per-engine vocabulary→family maps (frozen, auditable): [\`test/highlight-engines.ts\`](test/highlight-engines.ts). JavaScript: not yet on the bench. Regenerate: \`npm run bench:readme\`.${tsNote}</sub>`);
   return out.join('\n');
 }
 
@@ -721,7 +720,7 @@ if (WHICH === 'adversarial' || WHICH === 'both') {
 
 if (WRITE_README) {
   // Cross-ecosystem family-accuracy chart: Monogram (derived TM) vs the three
-  // official hand-written highlighters (TextMate, tree-sitter, Lezer), all graded
+  // official hand-written highlighters (TextMate, tree-sitter), all graded
   // against the tsc oracle over the ambiguity-rich issue-cases corpus.
   const advInputs = [
     ...issueTests.map((t) => ({ name: t.label, text: t.input })),
