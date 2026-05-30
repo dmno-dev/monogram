@@ -6,7 +6,9 @@
     "gen": "node src/cli.ts examples/typescript.ts && node src/cli.ts examples/javascript.ts",
     "test": "node test/sanity-check.ts",
     "conformance": "node test/run-conformance.ts",
+    "conformance:js": "node test/js-conformance.ts",
     "bench": "node test/highlight-bench.ts",
+    "bench:js": "node test/js-highlight-bench.ts",
     "bench:readme": "node test/highlight-bench.ts --corpus adversarial --write-readme"
   },
   "devDependencies": {

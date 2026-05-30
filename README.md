@@ -4,7 +4,7 @@ Write a language's grammar **once**. Monogram runs that single definition as a r
 
 > *mono + grammar — one grammar definition, many derived artifacts.*
 
-**Status:** an active research project with **two languages on one shared core**. TypeScript ([`examples/typescript.ts`](examples/typescript.ts)) is mature — 100% valid-code coverage, 97.8% bidirectional, and a highlighter graded *absolutely* against a neutral oracle (more correct than the official grammar on its own bug ledger; see [Results](#results)). JavaScript ([`examples/javascript.ts`](examples/javascript.ts)) is newer: it parses real-world JS and is the standalone ECMAScript base that the TypeScript grammar extends — but it does not yet have TypeScript-level conformance or highlighter-coverage validation. The engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
+**Status:** an active research project with **two languages on one shared core**. TypeScript ([`examples/typescript.ts`](examples/typescript.ts)) is mature — 100% valid-code coverage, 97.8% bidirectional, and a highlighter graded *absolutely* against a neutral oracle (more correct than the official grammar on its own bug ledger; see [Results](#results)). JavaScript ([`examples/javascript.ts`](examples/javascript.ts)) is newer: it parses real-world JS, is the standalone ECMAScript base that the TypeScript grammar extends, and its derived highlighter is graded by the *same* neutral oracle (92.6% — ahead of the official JavaScript grammar); it doesn't yet have TypeScript's full conformance-corpus depth. The engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
 
 ## Quick start
 
@@ -147,7 +147,7 @@ const Regex    = token(/\/…\//, {
 
 ## Adding a language
 
-This isn't hypothetical: **JavaScript is a second language on the same engine.** Since TypeScript = JavaScript + a type layer, [`examples/javascript.ts`](examples/javascript.ts) is the standalone ECMAScript base that owns the shared vocabulary (tokens, operator precedence, base scopes, reserved-word guards), and [`examples/typescript.ts`](examples/typescript.ts) *imports* it and adds the type layer — the dependency runs subset → superset only. JavaScript parses real-world JS ([`test/js-conformance.ts`](test/js-conformance.ts): 61/61 valid snippets accepted, TS-only syntax rejected, ground truth `tsc` in JS mode); it doesn't yet have TypeScript's conformance-level validation, but it proves the claim below — a second language is *one grammar file on an unchanged engine*.
+This isn't hypothetical: **JavaScript is a second language on the same engine.** Since TypeScript = JavaScript + a type layer, [`examples/javascript.ts`](examples/javascript.ts) is the standalone ECMAScript base that owns the shared vocabulary (tokens, operator precedence, base scopes, reserved-word guards), and [`examples/typescript.ts`](examples/typescript.ts) *imports* it and adds the type layer — the dependency runs subset → superset only. JavaScript parses real-world JS ([`test/js-conformance.ts`](test/js-conformance.ts): 61/61 valid snippets accepted, TS-only syntax rejected, ground truth `tsc` in JS mode) and its derived highlighter is graded by the *same* neutral oracle ([`test/js-highlight-bench.ts`](test/js-highlight-bench.ts): **92.6%** token-family accuracy, ahead of the official JavaScript TextMate grammar's 90.7%). It doesn't yet have TypeScript's full conformance-corpus depth, but it proves the claim below — a second language is *one grammar file on an unchanged engine*.
 
 A new language is **one grammar file, proven the way TypeScript is** — by its own parser conformance, not by eyeballing colors:
 
@@ -173,6 +173,8 @@ Self-contained (no external setup):
 node test/sanity-check.ts        # quick smoke test
 node test/agnostic.ts            # proves the engine is language-agnostic
 node test/test-issues.ts         # replays 50 official-grammar bugs against the generated grammar
+node test/js-conformance.ts      # JavaScript: 61/61 curated valid-JS accepted, TS-only syntax rejected
+node test/js-highlight-bench.ts  # JavaScript highlighter accuracy vs the neutral tsc-JS oracle (92.6%)
 ```
 
 The conformance and highlighter benches read external grammars/corpora and are **excluded from CI** for that reason:
