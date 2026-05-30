@@ -77,6 +77,8 @@ TypeScript — token-family accuracy (higher = more correct)
 <sub>Graded over 102 ambiguity-rich snippets ([`test/issue-cases.ts`](test/issue-cases.ts)) against tsc's own parse tree. The three parser-based highlighters (Monogram, tree-sitter, Lezer) cluster well above the hand-written TextMate grammar — that gap is the whole point. Per-engine vocabulary→family maps (frozen, auditable): [`test/highlight-engines.ts`](test/highlight-engines.ts). JavaScript: not yet on the bench. Regenerate: `npm run bench:readme`.</sub>
 <!-- bench:end -->
 
+> **Why the Monogram row is its *TextMate* output.** That's the one CI can rebuild on every commit. Monogram *also* derives a full **tree-sitter** grammar + query from the same definition; built locally to wasm and graded through this *same* `tsc` oracle, it scores **88.8%** — above both TextMate grammars (its own 87.6%, official 76.2%) and within range of the official parsers (tree-sitter 92.7%, Lezer 89.5%). The lift is *structural*: type references are captured by node position — `(type (ident) @type)` — not a hardcoded builtin list, so it never paints a value as a type. It's opt-in (needs a local wasm build), hence out of the CI chart: `MONOGRAM_TS_WASM=… node test/highlight-bench.ts --corpus adversarial --engines`. *(There is no Monogram-**Lezer** number: the grammar is expressive enough to trip Lezer's LR(1) shift/reduce wall — it parses under tree-sitter's GLR but won't build under Lezer.)*
+
 > **The other side of the ledger (honesty check).** On the *broad* TS parser-conformance corpus — not just the documented bugs — the two are now neck-and-neck: token-role accuracy is **tied at ~99%**, Monogram **leads on per-cell coverage** (100% of strict cells vs official's ~97%), and whole-file-perfect snippets are essentially level (~88% vs ~89%). The small residual is niche multiline type-annotation scoping, **not** the ambiguity class above. Clone the TS corpus to `/tmp/ts-repo` and run `node test/highlight-bench.ts` to see both corpora.
 
 ## What you get
@@ -89,10 +91,10 @@ From one grammar definition (a small TypeScript combinator API), three outputs a
 - **A VS Code language configuration** — `language-configuration.json` (comments, bracket pairs, auto-close/surround, folding) derived from the same tokens.
 - **CST node types** — a TypeScript discriminated union (keyed by rule) for typed tree consumers.
 
-And — from the same grammar — **first-pass generators** for the rest of the ecosystem. These are structurally valid and a strong starting point, but each carries known incomplete sections (marked in the output) that need hand-tuning before production:
+And — from the same grammar — generators for the rest of the ecosystem, at varying maturity:
 
-- **tree-sitter** — `grammar.js` + `queries/highlights.scm` + an external-scanner scaffold (template state machine stubbed).
-- **Lezer** — a CodeMirror 6 grammar + `styleTags` + a JS tokenizer (a handful of token regexes can't be expressed in Lezer's static model; marked `INCOMPLETE`).
+- **tree-sitter** — `grammar.js` + a **structural** `queries/highlights.scm` + an external scanner for context-sensitive lexing. Builds end-to-end (tree-sitter's GLR absorbs the grammar; compiles to wasm) and the *derived* query scores **88.8%** through the same oracle as the chart above — above both TextMate grammars, just under the official parsers. Opt-in (needs a local wasm build), so it stays out of the CI chart.
+- **Lezer** — a CodeMirror 6 grammar + `styleTags` + a JS tokenizer. Does **not** build: the grammar trips Lezer's **LR(1) shift/reduce wall** (TypeScript's `<` type-vs-expression ambiguity, which `tsc` resolves with semantic information LR(1) lacks). That's a ceiling of Lezer's parser class rather than a gap in the grammar — so there is no derived Lezer highlighter number.
 - **Monarch** — a Monaco (web) tokenizer (functional, bounded by JS-regex limits).
 
 ## The grammar is the source of truth

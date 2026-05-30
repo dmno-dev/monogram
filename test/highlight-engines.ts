@@ -127,14 +127,13 @@ export async function loadTreeSitter(): Promise<boolean> {
   }
 }
 
-export function treesitterFamilies(code: string): Span[] {
-  if (!tsParser || !tsQuery) throw new Error('call loadTreeSitter() first');
-  const tree = tsParser.parse(code);
-  // Per captured node keep the family from the HIGHEST pattern index — tree-sitter
-  // highlighting is "last matching pattern wins", which is why the TS additions'
-  // capitalized-identifier `@type` rule overrides the ecma base `@variable`.
+// Shared capture→family reduction. Per captured node keep the family from the
+// HIGHEST pattern index — tree-sitter highlighting is "last matching pattern wins"
+// (e.g. the TS additions' capitalized-identifier `@type` overrides the ecma base `@variable`).
+function tsFamiliesWith(parser: any, query: any, code: string): Span[] {
+  const tree = parser.parse(code);
   const best = new Map<string, { start: number; end: number; family: Family; pat: number }>();
-  for (const m of tsQuery.matches(tree.rootNode)) {
+  for (const m of query.matches(tree.rootNode)) {
     const pat = m.patternIndex ?? m.pattern ?? 0;
     for (const c of m.captures) {
       const fam = tsCaptureToFamily(c.name);
@@ -146,6 +145,36 @@ export function treesitterFamilies(code: string): Span[] {
     }
   }
   return [...best.values()].sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+export function treesitterFamilies(code: string): Span[] {
+  if (!tsParser || !tsQuery) throw new Error('call loadTreeSitter() first');
+  return tsFamiliesWith(tsParser, tsQuery, code);
+}
+
+// Monogram's OWN generated tree-sitter (compiled from examples/tree-sitter, loaded
+// from a prebuilt wasm). Gated behind explicit paths because building that wasm needs
+// the wasi-sdk toolchain — not something CI does — so it's a local/opt-in measurement.
+let mtsParser: any = null;
+let mtsQuery: any = null;
+export async function loadMonogramTreeSitter(wasmPath: string, queryPath: string): Promise<boolean> {
+  if (mtsParser) return true;
+  try {
+    const { Parser, Language, Query } = await import('web-tree-sitter');
+    await Parser.init();
+    const lang = await Language.load(wasmPath);
+    mtsParser = new Parser();
+    mtsParser.setLanguage(lang);
+    mtsQuery = new Query(lang, readFileSync(queryPath, 'utf8'));
+    return true;
+  } catch (e) {
+    console.error('monogram tree-sitter init failed:', (e as Error).message);
+    return false;
+  }
+}
+export function monogramTreesitterFamilies(code: string): Span[] {
+  if (!mtsParser || !mtsQuery) throw new Error('call loadMonogramTreeSitter() first');
+  return tsFamiliesWith(mtsParser, mtsQuery, code);
 }
 
 // ─── self-test: dump families for a diagnostic snippet across all engines ───────

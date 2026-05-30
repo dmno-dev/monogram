@@ -37,7 +37,7 @@ import onig from 'vscode-oniguruma';
 import { R, ROLE_SPEC, gradeScope, isCorrect, normScope, roleFamily, acceptableFamilies } from './scope-roles.ts';
 import type { RoleName, Verdict, Family } from './scope-roles.ts';
 import { tests as issueTests, multiLineTests as issueMultiLine } from './issue-cases.ts';
-import { scopeFamily, lezerFamilies, treesitterFamilies, loadTreeSitter, familyAt } from './highlight-engines.ts';
+import { scopeFamily, lezerFamilies, treesitterFamilies, loadTreeSitter, familyAt, loadMonogramTreeSitter, monogramTreesitterFamilies } from './highlight-engines.ts';
 import type { Span } from './highlight-engines.ts';
 
 const normScopeShort = (s: string): string => (s ? normScope(s) : '(none)');
@@ -589,13 +589,16 @@ const tmSpans = (grammar: vsctm.IGrammar, text: string): Span[] =>
   tmTokenize(grammar, text).map((t) => ({ start: t.start, end: t.end, family: scopeFamily(t.scope) }));
 
 // Grade each engine's token-FAMILY classification against the tsc oracle over `inputs`.
-async function engineFamilyScores(inputs: { name: string; text: string }[], tsOk: boolean): Promise<EngineScore[]> {
+// mtsOk = Monogram's own compiled tree-sitter is available (opt-in via MONOGRAM_TS_WASM;
+// kept OUT of the auto-chart since CI can't build that wasm — surfaced only by --engines).
+async function engineFamilyScores(inputs: { name: string; text: string }[], tsOk: boolean, mtsOk = false): Promise<EngineScore[]> {
   const engines: { name: string; spans: (t: string) => Span[] }[] = [
     { name: 'Monogram (TextMate, derived)', spans: (t) => tmSpans(monogramGrammar, t) },
     { name: 'official TextMate', spans: (t) => tmSpans(officialGrammar, t) },
     { name: 'official Lezer', spans: lezerFamilies },
   ];
   if (tsOk) engines.splice(2, 0, { name: 'official tree-sitter', spans: treesitterFamilies });
+  if (mtsOk) engines.push({ name: 'Monogram (tree-sitter, derived)', spans: monogramTreesitterFamilies });
 
   const acc: Record<string, { correct: number; total: number }> = {};
   for (const e of engines) acc[e.name] = { correct: 0, total: 0 };
@@ -725,10 +728,30 @@ if (WRITE_README) {
     ...issueMultiLine.map((t) => ({ name: t.label, text: t.lines.join('\n') })),
   ];
   const tsOk = await loadTreeSitter();
-  const scores = await engineFamilyScores(advInputs, tsOk);
+  const scores = await engineFamilyScores(advInputs, tsOk); // auto-chart: 4 engines (CI-reproducible)
   const graded = advInputs.filter((i) => {
     const sf = ts.createSourceFile('c.ts', i.text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     return ((sf as any).parseDiagnostics?.length ?? 0) === 0;
   }).length;
   writeReadmeBlock(buildBenchMarkdown(scores, graded, tsOk));
+}
+
+// --engines: print per-engine family accuracy to the terminal (NOT the README).
+// Set MONOGRAM_TS_WASM (+ MONOGRAM_TS_QUERY) to also grade Monogram's OWN compiled
+// tree-sitter — the opt-in measurement that needs a locally-built wasm.
+if (argv.includes('--engines')) {
+  const advInputs = [
+    ...issueTests.map((t) => ({ name: t.label, text: t.input })),
+    ...issueMultiLine.map((t) => ({ name: t.label, text: t.lines.join('\n') })),
+  ];
+  const tsOk = await loadTreeSitter();
+  const mtsWasm = process.env.MONOGRAM_TS_WASM;
+  const mtsOk = mtsWasm
+    ? await loadMonogramTreeSitter(mtsWasm, process.env.MONOGRAM_TS_QUERY ?? 'examples/tree-sitter/typescript/queries/highlights.scm')
+    : false;
+  const scores = await engineFamilyScores(advInputs, tsOk, mtsOk);
+  console.log('\n── token-family accuracy vs tsc oracle (issue-cases corpus) ──');
+  for (const s of [...scores].sort((a, b) => b.correct / b.total - a.correct / a.total)) {
+    console.log(`  ${s.name.padEnd(32)} ${((s.correct / s.total) * 100).toFixed(1)}%  (${s.correct}/${s.total})`);
+  }
 }
