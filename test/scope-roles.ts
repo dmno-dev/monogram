@@ -260,6 +260,44 @@ export function isCorrect(v: Verdict): boolean {
   return v === 'exact' || v === 'family';
 }
 
+// ─── token FAMILIES — the coarse, cross-ecosystem-fair grading axis ─────────────
+// TextMate / tree-sitter / Lezer classify at different granularities, so the
+// multi-grammar README chart grades at the FAMILY level: the bucket where the
+// *meaningful* highlighting errors live (value-painted-as-type, regex-as-operator,
+// keyword-vs-identifier). A coarse-by-design engine (Lezer calls a function decl
+// `variableName`) is NOT penalised — both are the `value` family. Contested roles
+// accept MULTIPLE families so neither reading is wrongly marked.
+export type Family = 'type' | 'value' | 'property' | 'keyword' | 'literal' | 'comment' | 'punct';
+
+/** The single family an oracle role belongs to (used to map engine output too). */
+export function roleFamily(role: RoleName): Family {
+  switch (role) {
+    case R.typeRef: case R.typeDecl: case R.typeBuiltin: case R.typeParam: return 'type';
+    case R.propAccess: case R.propDecl: case R.methodCall: return 'property';
+    case R.litString: case R.litNumber: case R.litRegex: case R.litBigint: case R.litTemplate: return 'literal';
+    case R.comment: return 'comment';
+    case R.kwControl: case R.kwOperator: case R.kwStorage: case R.kwOther: case R.constBuiltin: case R.thisSuper: return 'keyword';
+    case R.op: case R.punct: return 'punct';
+    default: return 'value'; // funcDecl, parameter, varDecl, valueRef, classRef, namespace, enumMember, importBinding
+  }
+}
+
+/** Families an engine may use for a role and still be "correct" — wider for the
+ *  genuinely contested roles (a `new X` target is type OR value; a called `.m` is
+ *  function OR property; `this` is keyword OR value). */
+export function acceptableFamilies(role: RoleName): Set<Family> {
+  switch (role) {
+    case R.classRef: return new Set<Family>(['type', 'value']);     // new X / decorator — class is both
+    case R.methodCall: return new Set<Family>(['value', 'property']); // called member — fn or prop
+    case R.funcDecl: return new Set<Family>(['value', 'property']);   // a METHOD name is defensibly either
+    case R.typeBuiltin: return new Set<Family>(['type', 'keyword']);  // `string`/`void`/… are type-keywords
+    case R.importBinding: return new Set<Family>(['value', 'type']);  // import name — value or type
+    case R.thisSuper: return new Set<Family>(['keyword', 'value']);   // this/super — either convention
+    case R.constBuiltin: return new Set<Family>(['keyword', 'literal']); // true/false/null
+    default: return new Set<Family>([roleFamily(role)]);
+  }
+}
+
 // ─── calibration self-test (run: `node test/scope-roles.ts`) ────────────────────
 // Proves the table behaves; guards against accidental edits breaking neutrality.
 if (import.meta.url === `file://${process.argv[1]}`) {

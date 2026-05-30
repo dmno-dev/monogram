@@ -18,8 +18,10 @@ on:
     paths:
       - 'examples/typescript.tmLanguage.json'
       - 'test/highlight-bench.ts'
+      - 'test/highlight-engines.ts'
       - 'test/scope-roles.ts'
       - 'test/issue-cases.ts'
+      - 'test/vendor/treesitter-typescript-highlights.scm'
       - '.github/workflows/readme-bench.yml'
   workflow_dispatch:
 
