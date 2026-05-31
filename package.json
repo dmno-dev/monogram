@@ -23,6 +23,7 @@
     "bench:vue-interp-expr": "node test/vue-interp-expr.ts",
     "bench:vue-official": "node test/vue-bench.ts",
     "bench:vue-issues": "node test/vue-issues.ts",
+    "bench:issues": "node test/issue-table.ts --write",
     "gate:treesitter": "(cd tree-sitter/typescript && npx tree-sitter generate && npx tree-sitter build --wasm .) && node test/treesitter-bench.ts",
     "bench:perf": "node test/perf-bench.ts",
     "bench:readme": "node test/highlight-bench.ts --corpus adversarial --write-readme",

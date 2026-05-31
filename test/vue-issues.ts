@@ -2,17 +2,14 @@
 //  vue-issues.ts — Monogram's DERIVED Vue grammar vs the hand-written official, on REAL
 //  highlighting bugs reported against vuejs/language-tools' vue.tmLanguage.json (the same
 //  approach as html-bench, which tests documented textmate/html.tmbundle issues — not a
-//  self-curated corpus). Each case is a faithful repro from an actual issue.
+//  self-curated corpus). The cases live in vue-issue-cases.ts (shared with the README's
+//  cross-language ✓ table, test/issue-table.ts).
 //
 //  Most are CLOSED — the hand-written grammar accumulated + hand-fixed them over many
 //  releases. The thesis question: does the DERIVED grammar exhibit them, or is it correct
 //  BY CONSTRUCTION? The headline family is TS operators inside template expressions
-//  (instanceof / typeof / ?? / ?. / => / <): the official had to patch each in the Vue
-//  grammar; Monogram embeds its OWN proven TS (source.ts#expression) and gets them free.
-//
-//  The breakage SIGNATURE of these bugs is that highlighting LEAKS past the construct and
-//  the rest of the file loses correct scopes. So every case checks a DOWNSTREAM marker
-//  (`<b>DONE</b>`) recovers to HTML — not just the bug site.
+//  (instanceof / typeof / ?? / ?. / => / <): Monogram embeds its OWN proven TS
+//  (source.ts#expression) and gets them free; the official patched each one over time.
 //
 //  Run: node test/vue-issues.ts   (needs test/fixtures/vue-official — see vue-bench.ts header)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,6 +17,7 @@ import vsctm from 'vscode-textmate';
 import onig from 'vscode-oniguruma';
 import { readFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { cases } from './vue-issue-cases.ts';
 
 const { INITIAL, Registry, parseRawGrammar } = vsctm;
 const require = createRequire(import.meta.url);
@@ -70,9 +68,6 @@ function scopeLookup(grammar: any, src: string): (offset: number) => string {
     return '';
   };
 }
-const familyOf = (s: string) => s.includes('source.ts') || s.includes('source.ts.embedded') ? 'ts'
-  : s.includes('source.js') ? 'js' : s.includes('source.css') ? 'css' : s.includes('text.html') ? 'html' : 'other';
-
 // at(text[, nth]) → scope string at the middle of the nth occurrence of `text`.
 function makeAt(look: (o: number) => string, src: string) {
   return (text: string, nth = 0) => {
@@ -81,48 +76,11 @@ function makeAt(look: (o: number) => string, src: string) {
   };
 }
 
-interface Check { at: string; nth?: number; want: (s: string) => boolean; desc: string }
-interface Case { id: string; title: string; src: string; checks: Check[] }
-const embedded = (s: string) => s.includes('source.ts') || s.includes('source.js');
-const htmlText = (s: string) => familyOf(s) === 'html';          // recovered to HTML (didn't leak into the embed)
-const DONE = '\n  <b>DONE</b>\n</template>';                     // downstream marker — must recover to HTML
-
-const cases: Case[] = [
-  // ── TS operators inside template expressions — Monogram embeds proven TS, gets these free ──
-  { id: '#3400', title: '`instanceof` in {{ }}', src: `<template>\n  <div>{{ err instanceof Error }}</div>${DONE}`,
-    checks: [{ at: 'instanceof', want: embedded, desc: 'instanceof embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers to HTML' }] },
-  { id: '#5370', title: '`typeof x !==` in v-if', src: `<template>\n  <p v-if="typeof x !== 'number'">a</p>${DONE}`,
-    checks: [{ at: 'typeof', want: embedded, desc: 'typeof embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#5118', title: '`?.` / `??` in {{ }}', src: `<template>\n  <div>{{ a?.b ?? c }}</div>${DONE}`,
-    checks: [{ at: '??', want: embedded, desc: 'nullish embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#1675', title: 'arrow `=>` in {{ }}', src: `<template>\n  <div>{{ items.map(i => i.id) }}</div>${DONE}`,
-    checks: [{ at: '=>', want: embedded, desc: 'arrow embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#6039/#4741', title: '`<` operator in {{ }} (not a tag!)', src: `<template>\n  <div>{{ a < b }}</div>${DONE}`,
-    checks: [{ at: 'DONE', want: htmlText, desc: 'the `<` is not mistaken for a tag — downstream recovers' }] },
-  { id: '#5722', title: 'negated ternary + quotes in {{ }}', src: `<template>\n  <div>{{ !ok ? 'yes' : 'no' }}</div>${DONE}`,
-    checks: [{ at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  // ── `as` type assertion (the #5012 intra-line ceiling family) ──
-  { id: '#6007/#2096/#520', title: '`as` type assertion in directive value', src: `<template>\n  <Foo :schema="x as JSONSchema" />${DONE}`,
-    checks: [{ at: 'as', want: embedded, desc: '`as` embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers (begin/while bounds it)' }] },
-  // ── script / boundary family ──
-  { id: '#5538/#2060', title: 'trailing `export type` before </script>', src: `<script lang="ts">\nexport type T = number\n</script>\n<template>\n  <p>hi</p>${DONE}`,
-    checks: [{ at: 'hi', want: htmlText, desc: '</script> ends the embed — template is HTML' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#3999', title: 'multi-line <script> start-tag attributes', src: `<script\n  lang="ts"\n>\nconst x = 1\n</script>`,
-    checks: [{ at: 'const', want: embedded, desc: 'body still embeds as TS across the multi-line tag' }] },
-  // ── tag / interpolation edge cases ──
-  { id: '#4769', title: 'tag name starting with `template`', src: `<template>\n  <templatex>{{ y }}</templatex>${DONE}`,
-    checks: [{ at: 'y', want: embedded, desc: 'interpolation inside a template-prefixed tag works' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#5701', title: '`{{` inside a <script> string', src: `<script>\nconst s = "{{ not interp }}"\n</script>\n<template>\n  <p>{{ real }}</p>${DONE}`,
-    checks: [{ at: 'real', want: embedded, desc: 'the real interpolation still embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#6070', title: 'capitalized component then a <style> block', src: `<template>\n  <MyComp @click="f">x</MyComp>\n</template>\n<style>\n.a { color: red }\n</style>`,
-    checks: [{ at: 'color', want: s => familyOf(s) === 'css', desc: '<style> after a capitalized tag still embeds as CSS' }] },
-];
-
 // Expected outcomes — a SNAPSHOT of the honest current state, so this gate catches a
-// REGRESSION (a ✓ that flips to ✗) or an unexpected change. Two cases are Monogram gaps:
+// REGRESSION (a ✓ that flips to ✗) or an unexpected change. The one remaining gap:
 //   #6007 — shared #5012 intra-line `as` ceiling (both fail; pure-TM limit, semantic-only).
-//   (#3999 — multi-line <script> start tag — was a Monogram gap; FIXED via the raw-text
-//    multi-line-start-tag region in gen-tm, mirroring the official's #multi-line-script-tag-stuff.)
+//   (#5722 and #3999 were Monogram gaps — both FIXED; see gen-tm generateMarkupInjection /
+//    emitRawMultiline.)
 const expect: Record<string, { mono: boolean; off: boolean }> = {
   '#3400': { mono: true, off: true }, '#5370': { mono: true, off: true }, '#5118': { mono: true, off: true },
   '#1675': { mono: true, off: true }, '#6039/#4741': { mono: true, off: true }, '#5722': { mono: true, off: true },
@@ -155,7 +113,6 @@ console.log(`\n  Honest reading: these are REAL bugs the hand-written grammar ac
 console.log(`  over many releases. Monogram WINS the operator family (instanceof / typeof / ?? / ?. /`);
 console.log(`  => / <) BY CONSTRUCTION — it embeds its own proven TS, never a per-operator patch.`);
 console.log(`  Remaining gap: #6007 (shared #5012 \`as\` intra-line ceiling — both fail, semantic-only).`);
-console.log(`  (#3999 multi-line <script> start tag was a Monogram gap — now FIXED by construction.)`);
 // Gate: reality must match the recorded snapshot — catches a regression or an unexpected change.
 if (deviations.length) { console.log('\n✗ Result changed from the recorded snapshot (update expect{} if intended):'); for (const d of deviations) console.log(d); process.exit(1); }
 console.log(`\n✓ Matches the recorded snapshot: Monogram ${mPass}/${cases.length}, official ${oPass}/${cases.length} on real reported issues.`);
