@@ -2525,6 +2525,46 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
     top.push({ include: `#${key}-inline` });   // single-line first, then multi-line
     top.push({ include: `#${key}` });
   };
+  // Multi-line START TAG variant — `<script\n  lang="ts"\n>` (force-expand-multiline
+  // formatting; vuejs/language-tools#3999). A TextMate `begin` is single-line, so the entries
+  // above (which need `>` on the line) can't open a tag whose `>` is on a later line. This is
+  // ONE region for the whole element; inside, an attr phase consumes the start tag until a
+  // known `lang=` (handed to a per-lang region selected by a line-agnostic LOOKAHEAD) or `>`,
+  // then the body embeds via the same begin/while bound as the single-line path. Mirrors the
+  // official grammar's #multi-line-script-tag-stuff. Mutually exclusive with the single-line
+  // begin (this requires NO `>` on the opening line), so the single-line path is untouched.
+  const emitRawMultiline = (tag: string, spec: string | { default: string; lang?: Record<string, string> }) => {
+    const defaultEmbed = typeof spec === 'string' ? spec : spec.default;
+    const langs = typeof spec === 'string' ? [] : Object.entries(spec.lang ?? {});
+    const closeAhead = `${o}${slash}${tag}[\\s${ccClose}]`;            // `</tag` then ws / `>`
+    const content = (embed: string): TmPattern[] => [                 // body after `>`, bounded at `</tag>`
+      { begin: `(?<=${c})(?=[^\\n]*${closeAhead})`, end: `(?=${closeAhead})`, contentName: embed, patterns: [{ include: embed }] },
+      { begin: `(?<=${c})`, while: `^(?!\\s*${closeAhead})`, contentName: embed, patterns: [{ include: embed }] },
+    ];
+    const langAlt = langs.map(([v]) => escapeRegex(v)).join('|');
+    const langLA = langAlt ? `\\blang\\s*=\\s*["']?(?:${langAlt})\\b` : '';
+    const pats: TmPattern[] = [
+      // attr phase: consume the start tag until a recognised `lang=` (left for a lang region) or `>`
+      { name: `meta.tag.${L}`, begin: `\\G${langLA ? `(?!${langLA})` : ''}`, end: langLA ? `(?=${langLA})|(${c})` : `(${c})`, endCaptures: { '1': { name: sClose } }, patterns: [{ include: '#attribute' }] },
+    ];
+    for (const [val, embed] of langs) {            // per-lang: lookahead-selected (works across lines)
+      pats.push({
+        begin: `(?=\\blang\\s*=\\s*["']?${escapeRegex(val)}\\b)`,
+        end: `(?=${closeAhead})`,
+        patterns: [{ begin: `\\G`, end: `(${c})`, endCaptures: { '1': { name: sClose } }, patterns: [{ include: '#attribute' }] }, ...content(embed)],
+      });
+    }
+    pats.push(...content(defaultEmbed));           // default (no recognised lang)
+    repository[`raw-${tag}-ml`] = {
+      name: `meta.${tag}.${L}`,
+      begin: `(${o})(${tag})\\b(?![^${ccClose}]*${c})`,               // `<tag` with NO `>` on this line
+      beginCaptures: { '1': { name: sOpen }, '2': { name: sName } },
+      end: `(${o}${slash})(${tag})\\s*(${c})`,
+      endCaptures: { '1': { name: sOpen }, '2': { name: sName }, '3': { name: sClose } },
+      patterns: pats,
+    };
+    top.push({ include: `#raw-${tag}-ml` });
+  };
   for (const tag of m.rawText?.tags ?? []) {
     const spec = m.rawText!.embed?.[tag]
       ?? (tag === 'script' ? 'source.js' : tag === 'style' ? 'source.css' : (tokScope(m.rawText!.token) ?? `source.${L}`));
@@ -2535,6 +2575,7 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
       for (const [langVal, langEmbed] of Object.entries(spec.lang ?? {})) emitRaw(`raw-${tag}-${langVal}`, tag, langEmbed, langVal);
       emitRaw(`raw-${tag}`, tag, spec.default);
     }
+    emitRawMultiline(tag, spec);   // multi-line start-tag variant (one per tag, all langs inside)
   }
 
   // A tag — open `<div …`, close `</div>`, self-close `<br/>`, or void `<br>`, all the

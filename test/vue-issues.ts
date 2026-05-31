@@ -121,14 +121,13 @@ const cases: Case[] = [
 // Expected outcomes — a SNAPSHOT of the honest current state, so this gate catches a
 // REGRESSION (a ✓ that flips to ✗) or an unexpected change. Two cases are Monogram gaps:
 //   #6007 — shared #5012 intra-line `as` ceiling (both fail; pure-TM limit, semantic-only).
-//   #3999 — multi-line <script> start tag: Monogram's raw-text region assumes a single-line
-//           start tag (the begin needs `>` on the line). Fixable via a raw-text restructure;
-//           niche (only with html.format.wrapAttributes=force-expand-multiline). KNOWN GAP.
+//   (#3999 — multi-line <script> start tag — was a Monogram gap; FIXED via the raw-text
+//    multi-line-start-tag region in gen-tm, mirroring the official's #multi-line-script-tag-stuff.)
 const expect: Record<string, { mono: boolean; off: boolean }> = {
   '#3400': { mono: true, off: true }, '#5370': { mono: true, off: true }, '#5118': { mono: true, off: true },
   '#1675': { mono: true, off: true }, '#6039/#4741': { mono: true, off: true }, '#5722': { mono: true, off: true },
   '#6007/#2096/#520': { mono: false, off: false }, '#5538/#2060': { mono: true, off: true },
-  '#3999': { mono: false, off: true }, '#4769': { mono: true, off: true }, '#5701': { mono: true, off: true },
+  '#3999': { mono: true, off: true }, '#4769': { mono: true, off: true }, '#5701': { mono: true, off: true },
   '#6070': { mono: true, off: true },
 };
 
@@ -155,8 +154,8 @@ console.log(`  ${'PASS'.padEnd(16)} ${(`${mPass}/${cases.length}`).padEnd(9)} ${
 console.log(`\n  Honest reading: these are REAL bugs the hand-written grammar accumulated + hand-fixed`);
 console.log(`  over many releases. Monogram WINS the operator family (instanceof / typeof / ?? / ?. /`);
 console.log(`  => / <) BY CONSTRUCTION — it embeds its own proven TS, never a per-operator patch.`);
-console.log(`  Monogram GAPS: #6007 (shared #5012 \`as\` intra-line ceiling — both fail, semantic-only);`);
-console.log(`  #3999 (multi-line <script> start tag — single-line-only raw-text region; fixable, niche).`);
+console.log(`  Remaining gap: #6007 (shared #5012 \`as\` intra-line ceiling — both fail, semantic-only).`);
+console.log(`  (#3999 multi-line <script> start tag was a Monogram gap — now FIXED by construction.)`);
 // Gate: reality must match the recorded snapshot — catches a regression or an unexpected change.
 if (deviations.length) { console.log('\n✗ Result changed from the recorded snapshot (update expect{} if intended):'); for (const d of deviations) console.log(d); process.exit(1); }
 console.log(`\n✓ Matches the recorded snapshot: Monogram ${mPass}/${cases.length}, official ${oPass}/${cases.length} on real reported issues.`);

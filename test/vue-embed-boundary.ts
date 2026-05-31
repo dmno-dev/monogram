@@ -80,6 +80,16 @@ function check(label: string, cond: boolean) { if (cond) pass++; else { fail++; 
   console.log(`  [intra-line ceiling] #5012 inner value still mis-scopes WITHIN the block = ${innerCeiling} — no pure-TM fix (semantic/Volar). begin/while now contains it to the block (gated above).`);
 }
 
+// ── #3999 (GATED): a MULTI-LINE <script> start tag (force-expand-multiline formatting) must
+//    still embed the body — a TextMate `begin` is single-line, so this needs the dedicated
+//    multi-line-start-tag region (gen-tm emitRawMultiline), with lang= detected across lines. ──
+{
+  const t = tokenize('<script\n  lang="ts"\n>\nconst mlx = 1\n</script>');
+  check('#3999: multi-line <script lang="ts"> start tag — body still embeds as TS', !!find(t, 'const', s => s.includes('source.ts') && s.includes('storage.type')));
+  const t2 = tokenize('<script\n  setup\n>\nvar mly = 1\n</script>');
+  check('#3999: multi-line <script> with no lang — body embeds as JS (default)', !!find(t2, 'var', s => s.includes('source.js')));
+}
+
 console.log(`\nvue-embed-boundary: ${pass}/${pass + fail} gated checks pass`);
 if (fail > 0) { console.log('✗ embed boundary FAILED (expected RED until the begin/while fix lands)'); process.exit(1); }
 console.log('✓ embed boundary: </script> ends the embed (#1666); #5012 documented as the TM ceiling');

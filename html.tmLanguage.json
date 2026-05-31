@@ -13,10 +13,16 @@
       "include": "#raw-script"
     },
     {
+      "include": "#raw-script-ml"
+    },
+    {
       "include": "#raw-style-inline"
     },
     {
       "include": "#raw-style"
+    },
+    {
+      "include": "#raw-style-ml"
     },
     {
       "include": "#raw-textarea-inline"
@@ -25,10 +31,16 @@
       "include": "#raw-textarea"
     },
     {
+      "include": "#raw-textarea-ml"
+    },
+    {
       "include": "#raw-title-inline"
     },
     {
       "include": "#raw-title"
+    },
+    {
+      "include": "#raw-title-ml"
     },
     {
       "include": "#tag"
@@ -113,6 +125,67 @@
         }
       ]
     },
+    "raw-script-ml": {
+      "name": "meta.script.html",
+      "begin": "(<)(script)\\b(?![^>]*>)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        }
+      },
+      "end": "(</)(script)\\s*(>)",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        },
+        "3": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      },
+      "patterns": [
+        {
+          "name": "meta.tag.html",
+          "begin": "\\G",
+          "end": "(>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.tag.end.html"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#attribute"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)(?=[^\\n]*</script[\\s>])",
+          "end": "(?=</script[\\s>])",
+          "contentName": "source.js",
+          "patterns": [
+            {
+              "include": "source.js"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)",
+          "while": "^(?!\\s*</script[\\s>])",
+          "contentName": "source.js",
+          "patterns": [
+            {
+              "include": "source.js"
+            }
+          ]
+        }
+      ]
+    },
     "raw-style-inline": {
       "name": "meta.style.html",
       "match": "(<)(style)\\b([^>]*)(>)(.*?)(</)(style)\\s*(>)",
@@ -178,6 +251,67 @@
       "patterns": [
         {
           "include": "source.css"
+        }
+      ]
+    },
+    "raw-style-ml": {
+      "name": "meta.style.html",
+      "begin": "(<)(style)\\b(?![^>]*>)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        }
+      },
+      "end": "(</)(style)\\s*(>)",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        },
+        "3": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      },
+      "patterns": [
+        {
+          "name": "meta.tag.html",
+          "begin": "\\G",
+          "end": "(>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.tag.end.html"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#attribute"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)(?=[^\\n]*</style[\\s>])",
+          "end": "(?=</style[\\s>])",
+          "contentName": "source.css",
+          "patterns": [
+            {
+              "include": "source.css"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)",
+          "while": "^(?!\\s*</style[\\s>])",
+          "contentName": "source.css",
+          "patterns": [
+            {
+              "include": "source.css"
+            }
+          ]
         }
       ]
     },
@@ -249,6 +383,67 @@
         }
       ]
     },
+    "raw-textarea-ml": {
+      "name": "meta.textarea.html",
+      "begin": "(<)(textarea)\\b(?![^>]*>)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        }
+      },
+      "end": "(</)(textarea)\\s*(>)",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        },
+        "3": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      },
+      "patterns": [
+        {
+          "name": "meta.tag.html",
+          "begin": "\\G",
+          "end": "(>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.tag.end.html"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#attribute"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)(?=[^\\n]*</textarea[\\s>])",
+          "end": "(?=</textarea[\\s>])",
+          "contentName": "source.embedded",
+          "patterns": [
+            {
+              "include": "source.embedded"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)",
+          "while": "^(?!\\s*</textarea[\\s>])",
+          "contentName": "source.embedded",
+          "patterns": [
+            {
+              "include": "source.embedded"
+            }
+          ]
+        }
+      ]
+    },
     "raw-title-inline": {
       "name": "meta.title.html",
       "match": "(<)(title)\\b([^>]*)(>)(.*?)(</)(title)\\s*(>)",
@@ -314,6 +509,67 @@
       "patterns": [
         {
           "include": "source.embedded"
+        }
+      ]
+    },
+    "raw-title-ml": {
+      "name": "meta.title.html",
+      "begin": "(<)(title)\\b(?![^>]*>)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        }
+      },
+      "end": "(</)(title)\\s*(>)",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        },
+        "3": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      },
+      "patterns": [
+        {
+          "name": "meta.tag.html",
+          "begin": "\\G",
+          "end": "(>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.tag.end.html"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#attribute"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)(?=[^\\n]*</title[\\s>])",
+          "end": "(?=</title[\\s>])",
+          "contentName": "source.embedded",
+          "patterns": [
+            {
+              "include": "source.embedded"
+            }
+          ]
+        },
+        {
+          "begin": "(?<=>)",
+          "while": "^(?!\\s*</title[\\s>])",
+          "contentName": "source.embedded",
+          "patterns": [
+            {
+              "include": "source.embedded"
+            }
+          ]
         }
       ]
     },
