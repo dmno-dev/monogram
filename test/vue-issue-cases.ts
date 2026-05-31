@@ -32,15 +32,15 @@ export const cases: Case[] = [
   { id: '#6007/#2096/#520', title: '`as` type assertion in directive value', src: `<template>\n  <Foo :schema="x as JSONSchema" />${DONE}`,
     checks: [{ at: 'as', want: embedded, desc: '`as` embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers (begin/while bounds it)' }] },
   // ── script / boundary family ──
-  { id: '#5538/#2060', title: 'trailing `export type` before </script>', src: `<script lang="ts">\nexport type T = number\n</script>\n<template>\n  <p>hi</p>${DONE}`,
+  { id: '#5538/#2060', title: 'trailing `export type` before `</script>`', src: `<script lang="ts">\nexport type T = number\n</script>\n<template>\n  <p>hi</p>${DONE}`,
     checks: [{ at: 'hi', want: htmlText, desc: '</script> ends the embed — template is HTML' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#3999', title: 'multi-line <script> start-tag attributes', src: `<script\n  lang="ts"\n>\nconst x = 1\n</script>`,
+  { id: '#3999', title: 'multi-line `<script>` start tag doesn\'t break the code after it', src: `<script\n  lang="ts"\n>\nconst x = 1\n</script>`,
     checks: [{ at: 'const', want: embedded, desc: 'body still embeds as TS across the multi-line tag' }] },
   // ── tag / interpolation edge cases ──
   { id: '#4769', title: 'tag name starting with `template`', src: `<template>\n  <templatex>{{ y }}</templatex>${DONE}`,
     checks: [{ at: 'y', want: embedded, desc: 'interpolation inside a template-prefixed tag works' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#5701', title: '`{{` inside a <script> string', src: `<script>\nconst s = "{{ not interp }}"\n</script>\n<template>\n  <p>{{ real }}</p>${DONE}`,
+  { id: '#5701', title: '`{{` inside a `<script>` string', src: `<script>\nconst s = "{{ not interp }}"\n</script>\n<template>\n  <p>{{ real }}</p>${DONE}`,
     checks: [{ at: 'real', want: embedded, desc: 'the real interpolation still embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  { id: '#6070', title: 'capitalized component then a <style> block', src: `<template>\n  <MyComp @click="f">x</MyComp>\n</template>\n<style>\n.a { color: red }\n</style>`,
+  { id: '#6070', title: 'capitalized component then a `<style>` block', src: `<template>\n  <MyComp @click="f">x</MyComp>\n</template>\n<style>\n.a { color: red }\n</style>`,
     checks: [{ at: 'color', want: s => familyOf(s) === 'css', desc: '<style> after a capitalized tag still embeds as CSS' }] },
 ];
