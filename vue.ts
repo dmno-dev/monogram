@@ -22,8 +22,9 @@ const vue = {
       token: 'RawText',
       embed: {
         template: 'text.html.basic',   // Monogram's own HTML grammar
-        script: 'source.js',           // Monogram's own JS/TS grammar (source.ts when lang="ts" — next step)
-        style: 'source.css',           // delegated CSS (the official grammar embeds source.css too)
+        // <script lang="ts"> embeds Monogram's OWN proven TS grammar (more correct than VS Code's).
+        script: { default: 'source.js', lang: { ts: 'source.ts', tsx: 'source.tsx', jsx: 'source.js.jsx' } },
+        style: { default: 'source.css', lang: { scss: 'source.css.scss', less: 'source.css.less', stylus: 'source.stylus', postcss: 'source.postcss' } },
       },
     },
     // Directives + {{ }} interpolation, INJECTED onto the embedded HTML's scopes (Vue

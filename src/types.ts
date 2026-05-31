@@ -36,6 +36,12 @@ export interface RegexContext {
   memberAccessTexts?: string[];
 }
 
+/** A raw-text element's embed, selected by a `lang="…"` attribute on the start tag. */
+export interface RawEmbed {
+  default: string;                  // embed scope when no (or an unlisted) lang= attribute
+  lang?: Record<string, string>;    // lang attribute value → embed scope (e.g. { ts: 'source.ts' })
+}
+
 /**
  * Declarative markup-mode tokenization (opt-in, e.g. HTML/Vue). When a grammar
  * declares `markup`, the lexer runs a text / tag / raw-text STATE MACHINE instead
@@ -59,8 +65,10 @@ export interface MarkupConfig {
   // everything up to the matching `tagOpen+closeMarker+name` is one `token`. `embed`
   // optionally maps a tag → the grammar scope to embed in its body (e.g. Vue SFC blocks:
   // template→text.html.basic, script→source.js, style→source.css); without it the body
-  // is scoped by `token` (HTML's script/style convention → source.js/css).
-  rawText?: { tags: string[]; token: string; embed?: Record<string, string> };
+  // is scoped by `token` (HTML's script/style convention → source.js/css). A tag may
+  // instead map to `{ default, lang }` to pick the embed by a `lang="…"` attribute on the
+  // start tag (Vue: `<script lang="ts">`→source.ts, `<style lang="scss">`→source.css.scss).
+  rawText?: { tags: string[]; token: string; embed?: Record<string, string | RawEmbed> };
   comment?: { open: string; close: string; token: string }; // e.g. `<!--` … `-->`
   // Void elements (`<br>`, `<img>`, `<meta>`, …) — no children, no close tag. The
   // lexer RETAGS an OPEN void-tag name from the identifier token to `voidNameToken`,

@@ -2478,14 +2478,16 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
   // single embedded region — `<`/`>` inside it never start a tag. The embedded grammar
   // comes from the declared `embed` map (Vue SFC blocks: template→text.html.basic,
   // script→source.js, style→source.css); else the HTML convention (script→source.js,
-  // style→source.css) or the token's own scope.
-  for (const tag of m.rawText?.tags ?? []) {
-    const key = `raw-${tag}`;
-    const embed = m.rawText!.embed?.[tag]
-      ?? (tag === 'script' ? 'source.js' : tag === 'style' ? 'source.css' : (tokScope(m.rawText!.token) ?? `source.${L}`));
+  // style→source.css) or the token's own scope. A `{ default, lang }` embed selects by a
+  // `lang="…"` start-tag attribute → one region per lang (matched first), then the default.
+  const ccClose = escapeForCharClass(m.tagClose);
+  const emitRaw = (key: string, tag: string, embed: string, langVal?: string) => {
+    const attrs = langVal
+      ? `([^${ccClose}]*\\blang\\s*=\\s*["']${langVal}["'][^${ccClose}]*)`   // start tag carries lang="<val>"
+      : `([^${ccClose}]*)`;
     repository[key] = {
       name: `meta.${tag}.${L}`,
-      begin: `(${o})(${tag})\\b([^${escapeForCharClass(m.tagClose)}]*)(${c})`,
+      begin: `(${o})(${tag})\\b${attrs}(${c})`,
       beginCaptures: { '1': { name: sOpen }, '2': { name: sName }, '4': { name: sClose } },
       end: `(${o}${slash})(${tag})\\s*(${c})`,
       endCaptures: { '1': { name: sOpen }, '2': { name: sName }, '3': { name: sClose } },
@@ -2493,6 +2495,17 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
       patterns: [{ include: embed }],
     };
     top.push({ include: `#${key}` });
+  };
+  for (const tag of m.rawText?.tags ?? []) {
+    const spec = m.rawText!.embed?.[tag]
+      ?? (tag === 'script' ? 'source.js' : tag === 'style' ? 'source.css' : (tokScope(m.rawText!.token) ?? `source.${L}`));
+    if (typeof spec === 'string') {
+      emitRaw(`raw-${tag}`, tag, spec);
+    } else {
+      // lang-specific regions FIRST (they require the matching lang= attr), default LAST.
+      for (const [langVal, langEmbed] of Object.entries(spec.lang ?? {})) emitRaw(`raw-${tag}-${langVal}`, tag, langEmbed, langVal);
+      emitRaw(`raw-${tag}`, tag, spec.default);
+    }
   }
 
   // A tag — open `<div …`, close `</div>`, self-close `<br/>`, or void `<br>`, all the

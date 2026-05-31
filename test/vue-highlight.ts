@@ -28,6 +28,7 @@ const registry = new Registry({
     if (sn === 'text.html.vue') return parseRawGrammar(read('vue.tmLanguage.json'), 'vue.json');
     if (sn === 'text.html.basic') return parseRawGrammar(read('html.tmLanguage.json'), 'html.json');   // Monogram's HTML
     if (sn === 'source.js') return parseRawGrammar(read('javascript.tmLanguage.json'), 'js.json');     // Monogram's JS
+    if (sn === 'source.ts') return parseRawGrammar(read('typescript.tmLanguage.json'), 'ts.json');     // Monogram's TS
     if (sn === 'source.css') return parseRawGrammar(cssStub, 'css.json');
     return null;
   },
@@ -82,6 +83,14 @@ check('<script> body: `<` is a JS operator, not a tag', !!find('<', s => s.inclu
 
 // ── <style> body is CSS ──
 check('<style> body embeds CSS', toks.some(t => t.text.includes('color') && t.scopes.includes('source.css')));
+
+// ── lang= selection: <script setup lang="ts"> embeds Monogram's TS (the headline) ──
+{
+  const ts = tokenize('<script setup lang="ts">const x: number = 1;</script>');
+  const f = (text: string, pred: (s: string) => boolean) => ts.find(t => t.text === text && pred(t.scopes));
+  check('<script lang="ts"> body → Monogram TS (const → storage.type.ts)', !!f('const', s => s.includes('source.ts') && s.includes('storage.type')));
+  check('<script lang="ts"> TS type annotation `:` (TS-only syntax)', !!f(':', s => s.includes('source.ts') && s.includes('type.annotation')));
+}
 
 console.log(`\nvue-highlight: ${pass}/${pass + fail} checks pass`);
 if (fail > 0) { console.log('✗ Vue SFC highlighter FAILED'); process.exit(1); }
