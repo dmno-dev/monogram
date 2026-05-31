@@ -4,7 +4,7 @@ Write a language's grammar **once**. Monogram runs that single definition as a r
 
 > *mono + grammar — one grammar definition, many derived artifacts.*
 
-**Status:** an active research project with **two languages on one shared core**. TypeScript ([`typescript.ts`](typescript.ts)) is mature — 100% valid-code coverage, 97.8% bidirectional, and a highlighter graded *absolutely* against a neutral oracle (more correct than the official grammar on its own bug ledger; see [The idea](#the-idea)). JavaScript ([`javascript.ts`](javascript.ts)) is newer: it parses real-world JS, is the standalone ECMAScript base that the TypeScript grammar extends, and its derived highlighter is graded by the *same* neutral oracle (92.6% — ahead of the official JavaScript grammar); it doesn't yet have TypeScript's full conformance-corpus depth. The engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
+**Status:** an active research project with **two token-stream languages and a markup language on one shared core**. TypeScript ([`typescript.ts`](typescript.ts)) is mature — 100% valid-code coverage, 97.8% bidirectional, and a highlighter graded *absolutely* against a neutral oracle (more correct than the official grammar on its own bug ledger; see [The idea](#the-idea)). JavaScript ([`javascript.ts`](javascript.ts)) is newer: it parses real-world JS, is the standalone ECMAScript base that the TypeScript grammar extends, and its derived highlighter is graded by the *same* neutral oracle (92.6% — ahead of the official JavaScript grammar); it doesn't yet have TypeScript's full conformance-corpus depth. HTML ([`html.ts`](html.ts)) is the newest and proves the engine generalizes *past token streams to markup* — all three highlighter engines (TextMate, Monarch, tree-sitter) derived from one ~95-line grammar, parser-validated against [`parse5`](https://github.com/inikulin/parse5) (see [The idea](#the-idea)). The engine is language-agnostic by construction and built for others to follow (see [Adding a language](#adding-a-language)).
 
 ## Quick start
 
@@ -45,10 +45,22 @@ The payoff — Monogram's *derived* highlighter vs the official *hand-written* g
 | TextMate | **88.4%** | 76.6% |
 | tree-sitter | **95.9%** | 92.7% |
 
-<sub>TypeScript, on the ambiguity-rich documented-bug ledger ([`test/issue-cases.ts`](test/issue-cases.ts)) where regex grammars slip. tree-sitter is CI-gated (`npm run gate:treesitter`); regenerate: `npm run bench:readme`.</sub>
+<sub>TypeScript, on the ambiguity-rich documented-bug ledger ([`test/issue-cases.ts`](test/issue-cases.ts)) where regex grammars slip. JavaScript **93.0%** (vs 90.7%); TSX matches official **100%** family. tree-sitter is CI-gated (`npm run gate:treesitter`); regenerate: `npm run bench:readme`.</sub>
 <!-- bench:end -->
 
 You can't out-regex a parser-derived grammar — its correctness comes from a dimension hand-written grammars never touch. That's **one ~1,050-line grammar** (JS + TS) replacing the official **3331-line** hand-written TextMate, on a language-agnostic engine, and **more correct on the official grammar's own bug ledger**: [`test/test-issues.ts`](test/test-issues.ts) replays **50** documented bugs (318 checks pass, 21 independently re-verified vs `tsc`, all still open upstream). A few scope differences are [deliberate](#known-differences-from-the-official-highlighter); the [upstream issue ledger](docs/upstream-issues.md) gives an honest verdict on the ones we don't.
+
+### It makes a neglected layer worth touching again
+
+Syntax grammars are critical infrastructure — every editor, every rendered code block, every diff on the web leans on them — yet they're hand-maintained piles of regex that almost no one is incentivized to improve. The work is thankless and *un-leveraged*: a better regex fixes one edge in one grammar, so bugs sit open for years (TypeScript's 100+; HTML's, below). Deriving the highlighter from a proven grammar changes the economics. An improvement is now **provable** (the conformance run says so), **leveraged** (one grammar fix flows to TextMate *and* tree-sitter *and* Monarch, across every language on the engine), and a genuine parsing problem rather than regex archaeology. The foundational layer everyone depends on and no one wanted to maintain becomes interesting to work on.
+
+**A second, very different proof — HTML.** Markup has no token stream, has raw-text elements (`<script>`), and treats whitespace as significant, so it stresses the engine somewhere TypeScript doesn't. Its derived TextMate highlighter, graded against a neutral [`parse5`](https://github.com/inikulin/parse5) oracle on a ledger of *documented* official-grammar issues ([`test/html-bench.ts`](test/html-bench.ts)):
+
+| HTML — token-family accuracy vs `parse5` | Monogram | Official |
+| --- | --- | --- |
+| 11 documented `html.tmbundle` / vscode issues | **100.0%** | 99.4% |
+
+A tie on everything the mature official grammar gets right — from a **~95-line** `html.ts` — and it *fixes* two bugs the official grammar still carries ([tmbundle#118](https://github.com/textmate/html.tmbundle/issues/118), [#124](https://github.com/textmate/html.tmbundle/issues/124): a `/` inside an unquoted attribute value, mis-greyed as a self-close). One grammar, three derived highlighters.
 
 ## What you get
 
