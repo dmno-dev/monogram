@@ -132,11 +132,17 @@ const corpus: string[] = [
 // the HTML analog of test/issues.ts. Each is valid HTML (parse5 parses it); the question
 // is whether the highlighter scopes it correctly.
 const reportedBugs: { issue: string; html: string }[] = [
-  { issue: 'tmbundle#84  tag name a prefix of the next', html: '<div><i><input></i></div>' },
-  { issue: 'tmbundle#97  space before > in end tag', html: '<div>x</div >' },
-  { issue: 'tmbundle#45  double dash inside a comment', html: '<!-- a -- b -->' },
-  { issue: 'vscode       unquoted attr value ending in /', html: '<a href=https://example.org/>x</a>' },
-  { issue: 'tmbundle#84b deeper same-prefix nesting', html: '<form><for>x</for></form>' },
+  { issue: 'tmbundle#84   tag name a prefix of the next', html: '<div><i><input></i></div>' },
+  { issue: 'tmbundle#84b  deeper same-prefix nesting', html: '<form><for>x</for></form>' },
+  { issue: 'tmbundle#97   space before > in end tag', html: '<div>x</div >' },
+  { issue: 'tmbundle#45   double dash inside a comment', html: '<!-- a -- b -->' },
+  { issue: 'tmbundle#118  unquoted attr value with / (URL)', html: '<a href=https://example.org/>foo</a>' },
+  { issue: 'vscode#140360 trailing / in unquoted value', html: '<link rel=stylesheet href=/css/app.css>' },
+  { issue: 'tmbundle#124  slash in unquoted value foo/', html: '<img class=foo/>' },
+  { issue: 'tmbundle#122  < inside a quoted attr value', html: '<a data-q="a < b">y</a>' },
+  { issue: 'tmbundle#116  angle brackets in attr value', html: '<input value="<x>">' },
+  { issue: 'tmbundle#115  > inside a quoted attr value', html: '<button title="a > b">go</button>' },
+  { issue: 'tmbundle#117  SVG / unknown tag name', html: '<svg><animateTransform attributeName="x"/></svg>' },
 ];
 for (const b of reportedBugs) corpus.push(b.html);
 
