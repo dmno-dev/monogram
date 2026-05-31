@@ -8,10 +8,11 @@
 //            GENERAL solution = a `begin/while` script region (re-checks per line, drops
 //            the region + pops the open TS region at the `</script>` line). GATED here.
 //
-//    #5012 — `:value="msg as string"`. The closing `"` is an INTRA-LINE boundary; a
-//            `while` (line-granularity) can't enforce it, and the embedded TS eats the
-//            quote as a string-literal-type. No pure-TM solution — semantic (Volar) only.
-//            Documented as a known ceiling, NOT gated.
+//    #5012 — `:value="msg as string"`. The closing `"` is an INTRA-LINE boundary a `while`
+//            (line-granularity) can't enforce, and a begin/end embed lets the `as`-cast eat
+//            the quote as a string-literal-type. SOLVED in pure TM: the value is CAPTURE-
+//            EMBEDDED into a `([^"]*)` span, so the embedded grammar is clipped at the quote
+//            (a capture's text range can't be crossed). GATED below.
 //
 //  Run: node test/vue-embed-boundary.ts
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,16 +69,17 @@ function check(label: string, cond: boolean) { if (cond) pass++; else { fail++; 
   check('#1666: the <b> in the template is HTML, not TS', !t.some(tk => tk.text === 'b' && tk.scopes.includes('source.ts')));
 }
 
-// ── #5012: the inner directive-value embed is the intra-line ceiling (NOT fixed in pure
-//    TM — `as string` still eats the closing " WITHIN the block). But begin/while now
-//    CONTAINS the damage to the enclosing block — content after </template> survives.
-//    We GATE the containment; the inner mis-scope is documented as the ceiling. ──
+// ── #5012 (GATED, FIXED): `:value="msg as string"` — the `as`-cast must NOT run its type
+//    context past the closing `"` and swallow the rest of the tag. The directive value is
+//    CAPTURE-EMBEDDED (a `([^"]*)` span), so the embedded grammar is clipped at the quote:
+//    the cast stops, the `"` stays a string end, and `>ok</b>` recovers to HTML. Once thought
+//    a pure-TM ceiling (semantic/Volar only); it isn't — capture-embed bounds it. ──
 {
   const t = tokenize('<template>\n  <b :value="msg as string">ok</b>\n</template>\n<script>const z = 1</script>');
   check('#5012: `msg as string` embeds as TS (the value)', !!find(t, 'as', s => s.includes('source.ts')));
-  check('#5012 CONTAINMENT: <script> after </template> survives (begin/while bounds the block)', !!find(t, 'const', s => s.includes('source.js') && s.includes('storage.type')));
-  const innerCeiling = t.some(tk => tk.text === 'ok' && tk.scopes.includes('source.ts'));
-  console.log(`  [intra-line ceiling] #5012 inner value still mis-scopes WITHIN the block = ${innerCeiling} — no pure-TM fix (semantic/Volar). begin/while now contains it to the block (gated above).`);
+  check('#5012 FIXED: the closing `"` is not eaten — `ok` after the value is HTML, not TS', !t.some(tk => tk.text === 'ok' && tk.scopes.includes('source.ts')));
+  check('#5012 FIXED: `</b>` after the value recovers to HTML', !!find(t, 'b', s => s.includes('entity.name.tag') && !s.includes('source.ts')));
+  check('#5012: <script> after </template> survives', !!find(t, 'const', s => s.includes('source.js') && s.includes('storage.type')));
 }
 
 // ── #3999 (GATED): a MULTI-LINE <script> start tag (force-expand-multiline formatting) must
@@ -92,4 +94,4 @@ function check(label: string, cond: boolean) { if (cond) pass++; else { fail++; 
 
 console.log(`\nvue-embed-boundary: ${pass}/${pass + fail} gated checks pass`);
 if (fail > 0) { console.log('✗ embed boundary FAILED (expected RED until the begin/while fix lands)'); process.exit(1); }
-console.log('✓ embed boundary: </script> ends the embed (#1666); #5012 documented as the TM ceiling');
+console.log('✓ embed boundary: </script> ends the embed (#1666); #5012 directive-value cast bounded by capture-embed');

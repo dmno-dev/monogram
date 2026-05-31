@@ -2663,32 +2663,50 @@ export function generateMarkupInjection(grammar: CstGrammar, grammarName: string
   // the expression embed applies ONLY to a directive's value, never a plain HTML attribute.
   if (inj.directives) {
     const d = inj.directives;
-    const value: TmPattern = {           // `= "expr"` / `= 'expr'` → embed the expression
-      begin: `(=)\\s*(["'])`,
-      beginCaptures: { '1': { name: d.eqScope } },
-      end: `\\2`,
-      contentName: inj.exprEmbed,
-      patterns: [{ include: inj.exprInclude }],
-    };
+    // `= "expr"` / `= 'expr'` → the value is an EXPRESSION, CAPTURE-EMBEDDED so the embedded
+    // grammar is BOUNDED to the quoted span. A begin/end region lets an inner rule cross the
+    // closing quote: `msg as string` runs its `as`-cast type context over the `"` (which looks
+    // like the start of a string-literal-type) and swallows the rest of the tag — the #5012
+    // bug (vuejs/language-tools#5012). A capture's text range CAN'T be crossed, so the cast
+    // stops at the quote. One pattern per quote char (a backref can't sit inside `[^…]`);
+    // single-line, which is what HTML attribute values are.
+    const strSfx = inj.exprEmbed.replace(/^.*\.embedded/, '') || '.html.vue';
+    const valueCap = (q: string): TmPattern => ({
+      match: `(=)\\s*(${q})([^${q}]*)(${q})`,
+      captures: {
+        '1': { name: d.eqScope },
+        '2': { name: `punctuation.definition.string.begin${strSfx}` },
+        '3': { name: inj.exprEmbed, patterns: [{ include: inj.exprInclude }] },
+        '4': { name: `punctuation.definition.string.end${strSfx}` },
+      },
+    });
+    const values: TmPattern[] = [
+      valueCap('"'), valueCap("'"),
+      // Multi-line value fallback (rare): a begin/end region still embeds across lines. The
+      // capture-embed bound is single-line (a `match` can't span lines), so a value whose
+      // closing quote is on a later line keeps the previous begin/end behaviour. Tried LAST,
+      // so a single-line value always takes the bounded capture-embed above (the #5012 fix).
+      { begin: `(=)\\s*(["'])`, beginCaptures: { '1': { name: d.eqScope } }, end: `\\2`, contentName: inj.exprEmbed, patterns: [{ include: inj.exprInclude }] },
+    ];
     const dir: TmPattern[] = [];
     for (const c of d.control) {         // v-for / v-if … — distinct scope, value embedded
       dir.push({
         begin: `(?<=[\\s<])(${c.match})(?=[=\\s/>]|$)`,
         beginCaptures: { '1': { name: c.scope } },
-        end: `(?=[\\s/>])`, patterns: [value],
+        end: `(?=[\\s/>])`, patterns: values,
       });
     }
     for (const s of d.shorthand) {       // `:`/`@`/`#` (+ arg), value embedded
       dir.push({
         begin: `(?<=[\\s<])(${escapeRegex(s.char)})(\\[[^\\]]*\\]|[\\w.-]*)`,
         beginCaptures: { '1': { name: s.scope }, '2': { name: d.nameScope } },
-        end: `(?=[\\s/>])`, patterns: [value],
+        end: `(?=[\\s/>])`, patterns: values,
       });
     }
     dir.push({                            // long-form `v-name`(`:arg`), value embedded
       begin: `(?<=[\\s<])(${escapeRegex(d.prefix)}[\\w-]+)(?:(:)(\\[[^\\]]*\\]|[\\w.-]*))?`,
       beginCaptures: { '1': { name: d.nameScope }, '2': { name: d.eqScope }, '3': { name: d.nameScope } },
-      end: `(?=[\\s/>])`, patterns: [value],
+      end: `(?=[\\s/>])`, patterns: values,
     });
     repository['directives'] = { patterns: dir };
     patterns.push({ include: '#directives' });

@@ -43,6 +43,50 @@
           "end": "(?=[\\s/>])",
           "patterns": [
             {
+              "match": "(=)\\s*(\")([^\"]*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
+              "match": "(=)\\s*(')([^']*)(')",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
               "begin": "(=)\\s*([\"'])",
               "beginCaptures": {
                 "1": {
@@ -68,6 +112,50 @@
           },
           "end": "(?=[\\s/>])",
           "patterns": [
+            {
+              "match": "(=)\\s*(\")([^\"]*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
+              "match": "(=)\\s*(')([^']*)(')",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
             {
               "begin": "(=)\\s*([\"'])",
               "beginCaptures": {
@@ -98,6 +186,50 @@
           "end": "(?=[\\s/>])",
           "patterns": [
             {
+              "match": "(=)\\s*(\")([^\"]*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
+              "match": "(=)\\s*(')([^']*)(')",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
               "begin": "(=)\\s*([\"'])",
               "beginCaptures": {
                 "1": {
@@ -127,6 +259,50 @@
           "end": "(?=[\\s/>])",
           "patterns": [
             {
+              "match": "(=)\\s*(\")([^\"]*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
+              "match": "(=)\\s*(')([^']*)(')",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
               "begin": "(=)\\s*([\"'])",
               "beginCaptures": {
                 "1": {
@@ -155,6 +331,50 @@
           },
           "end": "(?=[\\s/>])",
           "patterns": [
+            {
+              "match": "(=)\\s*(\")([^\"]*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
+              "match": "(=)\\s*(')([^']*)(')",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
             {
               "begin": "(=)\\s*([\"'])",
               "beginCaptures": {
@@ -187,6 +407,50 @@
           },
           "end": "(?=[\\s/>])",
           "patterns": [
+            {
+              "match": "(=)\\s*(\")([^\"]*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
+            {
+              "match": "(=)\\s*(')([^']*)(')",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.key-value.html.vue"
+                },
+                "2": {
+                  "name": "punctuation.definition.string.begin.html.vue"
+                },
+                "3": {
+                  "name": "source.ts.embedded.html.vue",
+                  "patterns": [
+                    {
+                      "include": "source.ts#expression"
+                    }
+                  ]
+                },
+                "4": {
+                  "name": "punctuation.definition.string.end.html.vue"
+                }
+              }
+            },
             {
               "begin": "(=)\\s*([\"'])",
               "beginCaptures": {

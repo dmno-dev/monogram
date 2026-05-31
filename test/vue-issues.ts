@@ -77,14 +77,16 @@ function makeAt(look: (o: number) => string, src: string) {
 }
 
 // Expected outcomes — a SNAPSHOT of the honest current state, so this gate catches a
-// REGRESSION (a ✓ that flips to ✗) or an unexpected change. The one remaining gap:
-//   #6007 — shared #5012 intra-line `as` ceiling (both fail; pure-TM limit, semantic-only).
-//   (#5722 and #3999 were Monogram gaps — both FIXED; see gen-tm generateMarkupInjection /
-//    emitRawMultiline.)
+// REGRESSION (a ✓ that flips to ✗) or an unexpected change. Monogram now solves every
+// reported case; #6007 is the one the OFFICIAL still gets wrong:
+//   #6007 — the #5012 `as`-in-a-directive-value bug. Monogram bounds the value with a
+//   CAPTURE-EMBED so the `as`-cast can't run its type context past the closing quote; the
+//   official's begin/end region lets it leak. (#5722 and #3999 were Monogram gaps — both
+//   FIXED too; see gen-tm generateMarkupInjection / emitRawMultiline.)
 const expect: Record<string, { mono: boolean; off: boolean }> = {
   '#3400': { mono: true, off: true }, '#5370': { mono: true, off: true }, '#5118': { mono: true, off: true },
   '#1675': { mono: true, off: true }, '#6039/#4741': { mono: true, off: true }, '#5722': { mono: true, off: true },
-  '#6007/#2096/#520': { mono: false, off: false }, '#5538/#2060': { mono: true, off: true },
+  '#6007/#2096/#520': { mono: true, off: false }, '#5538/#2060': { mono: true, off: true },
   '#3999': { mono: true, off: true }, '#4769': { mono: true, off: true }, '#5701': { mono: true, off: true },
   '#6070': { mono: true, off: true },
 };
@@ -112,7 +114,8 @@ console.log(`  ${'PASS'.padEnd(16)} ${(`${mPass}/${cases.length}`).padEnd(9)} ${
 console.log(`\n  Honest reading: these are REAL bugs the hand-written grammar accumulated + hand-fixed`);
 console.log(`  over many releases. Monogram WINS the operator family (instanceof / typeof / ?? / ?. /`);
 console.log(`  => / <) BY CONSTRUCTION — it embeds its own proven TS, never a per-operator patch.`);
-console.log(`  Remaining gap: #6007 (shared #5012 \`as\` intra-line ceiling — both fail, semantic-only).`);
+console.log(`  #6007 (#5012 \`as\` in a directive value): Monogram bounds the value with a capture-embed`);
+console.log(`  so the cast can't eat the closing quote — the official's begin/end region still leaks.`);
 // Gate: reality must match the recorded snapshot — catches a regression or an unexpected change.
 if (deviations.length) { console.log('\n✗ Result changed from the recorded snapshot (update expect{} if intended):'); for (const d of deviations) console.log(d); process.exit(1); }
 console.log(`\n✓ Matches the recorded snapshot: Monogram ${mPass}/${cases.length}, official ${oPass}/${cases.length} on real reported issues.`);
