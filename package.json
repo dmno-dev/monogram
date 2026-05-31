@@ -26,7 +26,6 @@
     "bench:issues": "node test/issue-table.ts --write",
     "gate:treesitter": "(cd tree-sitter/typescript && npx tree-sitter generate && npx tree-sitter build --wasm .) && node test/treesitter-bench.ts",
     "bench:perf": "node test/perf-bench.ts",
-    "bench:readme": "node test/highlight-bench.ts --corpus adversarial --write-readme",
     "coverage": "node test/scope-coverage.ts"
   },
   "devDependencies": {
