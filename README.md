@@ -39,12 +39,9 @@ You can't out-regex a parser-derived grammar, because its correctness comes from
 
 ## Results
 
-Measured against the TypeScript compiler's own conformance suite (single-file cases; `tsc`'s `parseDiagnostics` is ground truth):
-
 ```
 Valid-code coverage  100%    3376 / 3376 valid single-file cases parse        (zero gaps; no valid code missed)
 Bidirectional        97.8%   3585 / 3664 — also rejects what tsc rejects      (gap = over-acceptance only)
-Highlighter          graded absolutely vs a neutral tsc oracle — see the table below (auto-generated)
 Official-grammar bugs  50    issues replayed (318 checks pass); 21 independently re-verified vs tsc — all still open upstream
 Source size          628 lines — 5× fewer than the official 3331-line hand-written TextMate YAML
 Engine               language-agnostic — zero TypeScript-specific code (proven by test/agnostic.ts)
