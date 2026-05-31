@@ -24,19 +24,23 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      # Regenerate the TextMate grammar and fail if it drifts from the committed file
-      # (i.e. someone edited the grammar but forgot to regenerate).
+      # Regenerate every grammar's artifacts and fail if any drifts from the committed
+      # files (someone edited a grammar but forgot to regenerate). Covers all four
+      # grammars (sources at the repo root) + the tree-sitter packages.
       - name: Generate editor artifacts (must be in sync)
         run: |
-          node src/cli.ts examples/typescript.ts
-          git diff --exit-code -- examples/typescript.tmLanguage.json examples/typescript.language-configuration.json examples/typescript.monarch.json examples/typescript.cst-types.ts examples/tree-sitter
+          npm run gen
+          git diff --exit-code -- '*.tmLanguage.json' '*.language-configuration.json' '*.monarch.json' '*.cst-types.ts' tree-sitter
 
       # Self-contained suites (each exits non-zero on failure). The conformance /
-      # coverage / bench tools are excluded here: they need the external TypeScript
-      # conformance corpus and VS Code's grammar, which aren't available on a runner.
+      # coverage / bench tools needing the external TypeScript corpus or VS Code's
+      # grammar are excluded; tsx/jsx conformance use only the bundled tsc.
       - name: Test
         run: |
           node test/sanity-check.ts
           node test/agnostic.ts
           node test/refactor-guard.ts
           node test/test-issues.ts
+          node test/js-conformance.ts
+          node test/tsx-conformance.ts
+          node test/jsx-conformance.ts

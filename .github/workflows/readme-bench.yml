@@ -16,7 +16,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'examples/typescript.tmLanguage.json'
+      - 'typescript.tmLanguage.json'
       - 'test/highlight-bench.ts'
       - 'test/highlight-engines.ts'
       - 'test/scope-roles.ts'
