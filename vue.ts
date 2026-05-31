@@ -9,14 +9,23 @@
 // Increment 1: the SFC block skeleton + block-level embeds. Vue template directives
 // (v-if / :bind / @event / #slot) and {{ }} interpolation are the next increment.
 // Oracle: vuejs/language-tools' hand-written vue.tmLanguage.json (scopeName text.html.vue).
-import html from './html.ts';
+//
+// Vue is a DIALECT of html.ts: it reuses html's tokens/rules/scopes verbatim (a .vue file
+// is HTML's raw-text mechanism with a per-block embed map) and only swaps the markup config
+// + scope name. We import those reusable pieces and build through `defineGrammar` — the same
+// API every other grammar uses — instead of spreading html's already-built grammar object.
+import { defineGrammar } from './src/api.ts';
+import { tokens, rules, scopes, markup as htmlMarkup } from './html.ts';
 
-const vue = {
-  ...html,
+export default defineGrammar({
   name: 'vue',
   scopeName: 'text.html.vue',
+  tokens,
+  rules,
+  entry: rules.Document,
+  scopes,
   markup: {
-    ...html.markup!,
+    ...htmlMarkup,
     rawText: {
       tags: ['template', 'script', 'style'],
       token: 'RawText',
@@ -55,6 +64,4 @@ const vue = {
       },
     },
   },
-};
-
-export default vue;
+});

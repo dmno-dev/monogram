@@ -10,6 +10,7 @@
 // algorithm (that is not a context-free grammar); conformance is measured against
 // `parse5` on well-formed input. See memory: html-vue-markup.
 import { token, rule, defineGrammar, many, opt, alt } from './src/api.ts';
+import type { MarkupConfig } from './src/types.ts';
 
 // ── Tokens ──
 // Tag and attribute names: a letter, then name chars (incl. `-` for custom
@@ -69,26 +70,35 @@ const Document = rule($ => [
   [many(alt(Element, Comment, Text))],
 ]);
 
+// The reusable pieces. Exported so a DIALECT (vue.ts) can build a sibling grammar from
+// the SAME tokens/rules/scopes via its OWN `defineGrammar` call — rather than spreading
+// html.ts's already-built grammar (which bypasses the API). Calling `defineGrammar` twice
+// with these shared refs is safe: it only reads them (no mutation).
+export const tokens = { Name, VoidName, AttrValue, UnquotedValue, Text, RawText, Comment };
+export const rules = { Element, Attr, Node, Document };
+export const scopes: Record<string, string[]> = {
+  'entity.name.tag': [],            // tag names — refined by the highlighter from rule shape
+  'punctuation.definition.tag': ['<', '>', '/'],
+};
+export const markup: MarkupConfig = {
+  textToken: 'Text',
+  tagOpen: '<',
+  tagClose: '>',
+  closeMarker: '/',
+  rawText: { tags: ['script', 'style', 'textarea', 'title'], token: 'RawText' },
+  comment: { open: '<!--', close: '-->', token: 'Comment' },
+  // The HTML void elements (no children, no close tag).
+  voidTags: ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+             'link', 'meta', 'param', 'source', 'track', 'wbr'],
+  voidNameToken: 'VoidName',
+};
+
 export default defineGrammar({
   name: 'html',
   scopeName: 'text.html.basic',
-  tokens: { Name, VoidName, AttrValue, UnquotedValue, Text, RawText, Comment },
-  rules: { Element, Attr, Node, Document },
+  tokens,
+  rules,
   entry: Document,
-  scopes: {
-    'entity.name.tag': [],            // tag names — refined by the highlighter from rule shape
-    'punctuation.definition.tag': ['<', '>', '/'],
-  },
-  markup: {
-    textToken: 'Text',
-    tagOpen: '<',
-    tagClose: '>',
-    closeMarker: '/',
-    rawText: { tags: ['script', 'style', 'textarea', 'title'], token: 'RawText' },
-    comment: { open: '<!--', close: '-->', token: 'Comment' },
-    // The HTML void elements (no children, no close tag).
-    voidTags: ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
-               'link', 'meta', 'param', 'source', 'track', 'wbr'],
-    voidNameToken: 'VoidName',
-  },
+  scopes,
+  markup,
 });
