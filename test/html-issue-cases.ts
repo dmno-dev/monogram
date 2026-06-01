@@ -31,15 +31,16 @@ export const cases: HtmlCase[] = [
     at: 'section', nth: 1, want: isTag },                                     // the close tag name is still a tag
 
   // ── Scope GAPS Monogram does not cover (honest non-wins, kept so the HTML column isn't
-  //    all-wins). Monogram embeds only in raw-text elements (<script>/<style>), never in
-  //    attribute values, and its Text token is a single `[^<]+` blob, so it cannot tokenize
-  //    character entities. #81/#88 → `(only official)`. #113 → `(both miss)`: the official
-  //    embeds JS but mis-reads `//` in the string (the reported bug), and Monogram doesn't
-  //    embed attribute JS at all — so the `//` is correctly inside a JS string in NEITHER.
+  //    all-wins). Graded against the REAL embedded JS/CSS (not a stub), so a ✓ means the span
+  //    is *correctly* highlighted, not merely delegated. #81: Monogram's Text token is one
+  //    `[^<]+` blob, so it can't scope a character entity → only official. #88: Monogram never
+  //    embeds CSS in attribute values; the official does → only official. #113: the official
+  //    embeds JS but mis-reads `//` in the string (the bug), and Monogram doesn't embed
+  //    attribute JS at all, so the `//` is correct JS in NEITHER → both miss.
   { id: 'tmbundle#113', title: '`//` in an `onclick=` JS string read as a comment', src: `<input onclick="location.href='https://x.org/'">`,
     at: '//', want: s => s.includes('source.js') && !s.includes('comment') }, // official: real JS embed reads // as a comment (bug); Monogram: value is one HTML string, no source.js
   { id: 'tmbundle#81', title: 'character entity `&amp;` in text', src: '<p>x &amp; z</p>',
     at: '&amp;', want: s => s.includes('constant.character.entity') },        // official scopes the entity; Monogram's Text blob cannot
   { id: 'tmbundle#88', title: 'CSS inside a `style` attribute value', src: '<div style="color:red">x</div>',
-    at: 'color', want: s => s.includes('source.css') },                       // official may embed source.css in style=; Monogram leaves it a string
+    at: 'color', want: s => s.includes('source.css') },                       // official embeds REAL css in style=; Monogram keeps the value a plain HTML string
 ];

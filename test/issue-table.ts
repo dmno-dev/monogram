@@ -33,6 +33,7 @@ const official = {
   ts: process.env.MONOGRAM_OFFICIAL_TM ?? `${VSCODE}/typescript-basics/syntaxes/TypeScript.tmLanguage.json`,
   html: process.env.MONOGRAM_OFFICIAL_HTML ?? `${VSCODE}/html/syntaxes/html.tmLanguage.json`,
   js: process.env.MONOGRAM_OFFICIAL_JS ?? `${VSCODE}/javascript/syntaxes/JavaScript.tmLanguage.json`,
+  css: process.env.MONOGRAM_OFFICIAL_CSS ?? `${VSCODE}/css/syntaxes/css.tmLanguage.json`,
 };
 const VUEFIX = 'test/fixtures/vue-official';
 
@@ -72,15 +73,16 @@ async function gradeTs(): Promise<Row[] | null> {
 // ── HTML: cases are {id, title, src, at, want}; pass = want(scope at the marked span).
 async function gradeHtml(): Promise<Row[] | null> {
   if (!existsSync(official.html)) return null;
-  // Load the REAL embedded JS so event-handler bugs reproduce (e.g. #113: `//` inside an
-  // onclick JS string mis-read as a comment) — a stub can't show them. Monogram's html.ts
-  // embeds nothing in attributes, so its source.js is never reached for these cases.
-  const mk = (htmlPath: string, jsPath: string) => new Registry({ onigLib, loadGrammar: async (sn) =>
+  // Grade against the REAL embedded grammars (JS, CSS) so a ✓ means the span is *correctly*
+  // highlighted, not merely delegated — a stub hides embedded bugs (e.g. #113: `//` inside an
+  // onclick JS string read as a comment). Monogram's html.ts embeds nothing in attributes, so
+  // these embeds are reached only for the official.
+  const mkReg = (htmlPath: string, embeds: Record<string, string>) => new Registry({ onigLib, loadGrammar: async (sn) =>
     sn === 'text.html.basic' ? parseRawGrammar(read(htmlPath), 'html.json') :
-    (sn === 'source.js' && existsSync(jsPath)) ? parseRawGrammar(read(jsPath), 'js.json') :
+    (embeds[sn] && existsSync(embeds[sn])) ? parseRawGrammar(read(embeds[sn]), `${sn}.json`) :
     (sn.startsWith('source.') || sn.startsWith('text.')) ? stub(sn) : null });
-  const mono = (await mk('html.tmLanguage.json', 'javascript.tmLanguage.json').loadGrammar('text.html.basic'))!;
-  const off = (await mk(official.html, official.js).loadGrammar('text.html.basic'))!;
+  const mono = (await mkReg('html.tmLanguage.json', { 'source.js': 'javascript.tmLanguage.json' }).loadGrammar('text.html.basic'))!;
+  const off = (await mkReg(official.html, { 'source.js': official.js, 'source.css': official.css }).loadGrammar('text.html.basic'))!;
   return htmlCases.map(c => ({ id: c.id, title: c.title, mono: c.want(scopeAtFns(mono, c.src)(c.at, c.nth)), off: c.want(scopeAtFns(off, c.src)(c.at, c.nth)) }));
 }
 
