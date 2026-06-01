@@ -34,8 +34,8 @@ export const cases: HtmlCase[] = [
   //    all-wins). Monogram embeds only in raw-text elements (<script>/<style>), never in
   //    attribute values, and its Text token is a single `[^<]+` blob, so it cannot tokenize
   //    character entities. The official does both → these grade as `(only official)`.
-  { id: 'tmbundle#50', title: 'event-handler attribute value is JavaScript (`onclick=`)', src: '<button onclick="doThing()">x</button>',
-    at: 'doThing', want: s => s.includes('source.js') },                      // official embeds source.js in on*; Monogram leaves the value a string
+  { id: 'tmbundle#113', title: 'embedded JS in an `onclick=` attribute value', src: `<input onclick="location.href='https://x.org/'">`,
+    at: 'location', want: s => s.includes('source.js') },                     // official embeds source.js in on* (and #113 shows that embedded JS is itself buggy); Monogram leaves the value a string
   { id: 'tmbundle#81', title: 'character entity `&amp;` in text', src: '<p>x &amp; z</p>',
     at: '&amp;', want: s => s.includes('constant.character.entity') },        // official scopes the entity; Monogram's Text blob cannot
   { id: 'tmbundle#88', title: 'CSS inside a `style` attribute value', src: '<div style="color:red">x</div>',

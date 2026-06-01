@@ -78,7 +78,7 @@ _Each hand-written **official** grammar vs Monogram's **derived** one, on the bu
 | issue | Monogram | official |
 |---|:--:|:--:|
 | [tmbundle#118](https://github.com/textmate/html.tmbundle/issues/118) — trailing `/` in an unquoted URL value **(only Monogram)** | ✓ | · |
-| [tmbundle#50](https://github.com/textmate/html.tmbundle/issues/50) — event-handler attribute value is JavaScript (`onclick=`) **(only official)** | · | ✓ |
+| [tmbundle#113](https://github.com/textmate/html.tmbundle/issues/113) — embedded JS in an `onclick=` attribute value **(only official)** | · | ✓ |
 | [tmbundle#81](https://github.com/textmate/html.tmbundle/issues/81) — character entity `&amp;` in text **(only official)** | · | ✓ |
 | [tmbundle#88](https://github.com/textmate/html.tmbundle/issues/88) — CSS inside a `style` attribute value **(only official)** | · | ✓ |
 | [tmbundle#124](https://github.com/textmate/html.tmbundle/issues/124) — slash in unquoted value `foo/` | ✓ | ✓ |
