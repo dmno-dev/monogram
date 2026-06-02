@@ -51,21 +51,26 @@ _Each hand-written **official** grammar vs Monogram's **derived** one, on the bu
 #### TypeScript
 | issue | Monogram | official |
 |---|:--:|:--:|
-| [#978](https://github.com/microsoft/TypeScript-TmLanguage/issues/978) — typeof x < string then function **(only Monogram)** | ✓ | · |
-| [#859](https://github.com/microsoft/TypeScript-TmLanguage/issues/859) — as cast inside < > comparison **(only Monogram)** | ✓ | · |
-| [#1020](https://github.com/microsoft/TypeScript-TmLanguage/issues/1020) — new Map<number, number>; (no parens) **(only Monogram)** | ✓ | · |
-| [#855](https://github.com/microsoft/TypeScript-TmLanguage/issues/855) — new Map</* comment */string, IArgs>() **(only Monogram)** | ✓ | · |
-| [#853](https://github.com/microsoft/TypeScript-TmLanguage/issues/853) — throw /foo/ is regex **(only Monogram)** | ✓ | · |
-| [#804](https://github.com/microsoft/TypeScript-TmLanguage/issues/804) — /[a\-b]/g char class recognized **(only Monogram)** | ✓ | · |
-| [#869](https://github.com/microsoft/TypeScript-TmLanguage/issues/869) — x in obj ? x : fallback ternary works **(only Monogram)** | ✓ | · |
-| [#770](https://github.com/microsoft/TypeScript-TmLanguage/issues/770) — function call parens are punctuation **(only Monogram)** | ✓ | · |
-| [#1021](https://github.com/microsoft/TypeScript-TmLanguage/issues/1021) — regex with the v (unicode-sets) flag is recognized **(only Monogram)** | ✓ | · |
-| [#1025](https://github.com/microsoft/TypeScript-TmLanguage/issues/1025) — for-of without surrounding space keeps `of` a loop keyword **(only Monogram)** | ✓ | · |
-| [#815](https://github.com/microsoft/TypeScript-TmLanguage/issues/815) — a class method named `new` is a method name, not the operator **(only Monogram)** | ✓ | · |
-| [#992](https://github.com/microsoft/TypeScript-TmLanguage/issues/992) — casting to a type named `type` does not break highlighting **(only Monogram)** | ✓ | · |
-| [#995](https://github.com/microsoft/TypeScript-TmLanguage/issues/995) — paren-wrapped `as keyof typeof` assertion tokenizes **(only Monogram)** | ✓ | · |
-| [#1050](https://github.com/microsoft/TypeScript-TmLanguage/issues/1050) — typeof y < string is a relational operator not generic _(both miss)_ | · | · |
-| [#891](https://github.com/microsoft/TypeScript-TmLanguage/issues/891) — `from` as an ordinary variable is not a keyword _(both miss)_ | · | · |
+| [#978](https://github.com/microsoft/TypeScript-TmLanguage/issues/978) — typeof x < string then function | ✓ | · |
+| [#859](https://github.com/microsoft/TypeScript-TmLanguage/issues/859) — as cast inside < > comparison | ✓ | · |
+| [#1020](https://github.com/microsoft/TypeScript-TmLanguage/issues/1020) — new Map<number, number>; (no parens) | ✓ | · |
+| [#855](https://github.com/microsoft/TypeScript-TmLanguage/issues/855) — new Map</* comment */string, IArgs>() | ✓ | · |
+| [#853](https://github.com/microsoft/TypeScript-TmLanguage/issues/853) — throw /foo/ is regex | ✓ | · |
+| [#804](https://github.com/microsoft/TypeScript-TmLanguage/issues/804) — /[a\-b]/g char class recognized | ✓ | · |
+| [#869](https://github.com/microsoft/TypeScript-TmLanguage/issues/869) — x in obj ? x : fallback ternary works | ✓ | · |
+| [#770](https://github.com/microsoft/TypeScript-TmLanguage/issues/770) — function call parens are punctuation | ✓ | · |
+| [#1021](https://github.com/microsoft/TypeScript-TmLanguage/issues/1021) — regex with the v (unicode-sets) flag is recognized | ✓ | · |
+| [#1025](https://github.com/microsoft/TypeScript-TmLanguage/issues/1025) — for-of without surrounding space keeps `of` a loop keyword | ✓ | · |
+| [#815](https://github.com/microsoft/TypeScript-TmLanguage/issues/815) — a class method named `new` is a method name, not the operator | ✓ | · |
+| [#992](https://github.com/microsoft/TypeScript-TmLanguage/issues/992) — casting to a type named `type` does not break highlighting | ✓ | · |
+| [#995](https://github.com/microsoft/TypeScript-TmLanguage/issues/995) — paren-wrapped `as keyof typeof` assertion tokenizes | ✓ | · |
+| [#1050](https://github.com/microsoft/TypeScript-TmLanguage/issues/1050) — typeof y < string is a relational operator not generic | · | · |
+| [#891](https://github.com/microsoft/TypeScript-TmLanguage/issues/891) — `from` as an ordinary variable is not a keyword | · | · |
+
+<details><summary>… and 7 more both grammars already handle (✓ / ✓)</summary>
+
+| issue | Monogram | official |
+|---|:--:|:--:|
 | [#1063](https://github.com/microsoft/TypeScript-TmLanguage/issues/1063) — /\cJ/ control char escape | ✓ | ✓ |
 | [#736](https://github.com/microsoft/TypeScript-TmLanguage/issues/736) — obj.example() method gets entity.name.function | ✓ | ✓ |
 | [#788](https://github.com/microsoft/TypeScript-TmLanguage/issues/788) — optional chaining ?. is the optional accessor | ✓ | ✓ |
@@ -74,12 +79,19 @@ _Each hand-written **official** grammar vs Monogram's **derived** one, on the bu
 | [#994](https://github.com/microsoft/TypeScript-TmLanguage/issues/994) — default type-parameter value is colored | ✓ | ✓ |
 | [#1027](https://github.com/microsoft/TypeScript-TmLanguage/issues/1027) — nested generic `>>` closes two type-arg lists, not a shift | ✓ | ✓ |
 
+</details>
+
 #### HTML
 | issue | Monogram | official |
 |---|:--:|:--:|
-| [tmbundle#118](https://github.com/textmate/html.tmbundle/issues/118) — trailing `/` in an unquoted URL value **(only Monogram)** | ✓ | · |
-| [tmbundle#108](https://github.com/textmate/html.tmbundle/issues/108) — nested `<svg>` is a valid tag, not flagged invalid **(only Monogram)** | ✓ | · |
-| [tmbundle#113](https://github.com/textmate/html.tmbundle/issues/113) — `//` in an `onclick=` JS string read as a comment _(both miss)_ | · | · |
+| [tmbundle#118](https://github.com/textmate/html.tmbundle/issues/118) — trailing `/` in an unquoted URL value | ✓ | · |
+| [tmbundle#108](https://github.com/textmate/html.tmbundle/issues/108) — nested `<svg>` is a valid tag, not flagged invalid | ✓ | · |
+| [tmbundle#113](https://github.com/textmate/html.tmbundle/issues/113) — `//` in an `onclick=` JS string read as a comment | · | · |
+
+<details><summary>… and 9 more both grammars already handle (✓ / ✓)</summary>
+
+| issue | Monogram | official |
+|---|:--:|:--:|
 | [tmbundle#124](https://github.com/textmate/html.tmbundle/issues/124) — slash in unquoted value `foo/` | ✓ | ✓ |
 | [vscode#140360](https://github.com/microsoft/vscode/issues/140360) — `/` inside an unquoted value (path) | ✓ | ✓ |
 | [tmbundle#84](https://github.com/textmate/html.tmbundle/issues/84) — tag name a prefix of a sibling (`<i>`/`<input>`) | ✓ | ✓ |
@@ -90,10 +102,17 @@ _Each hand-written **official** grammar vs Monogram's **derived** one, on the bu
 | [tmbundle#81](https://github.com/textmate/html.tmbundle/issues/81) — character entity `&amp;` in text | ✓ | ✓ |
 | [tmbundle#102](https://github.com/textmate/html.tmbundle/issues/102) — `<style>` element CSS is tokenized, not a flat blob | ✓ | ✓ |
 
+</details>
+
 #### Vue
 | issue | Monogram | official |
 |---|:--:|:--:|
-| [#6007](https://github.com/vuejs/language-tools/issues/6007)/[#2096](https://github.com/vuejs/language-tools/issues/2096)/[#520](https://github.com/vuejs/language-tools/issues/520) — `as` type assertion in directive value **(only Monogram)** | ✓ | · |
+| [#6007](https://github.com/vuejs/language-tools/issues/6007)/[#2096](https://github.com/vuejs/language-tools/issues/2096)/[#520](https://github.com/vuejs/language-tools/issues/520) — `as` type assertion in directive value | ✓ | · |
+
+<details><summary>… and 11 more both grammars already handle (✓ / ✓)</summary>
+
+| issue | Monogram | official |
+|---|:--:|:--:|
 | [#3400](https://github.com/vuejs/language-tools/issues/3400) — `instanceof` in {{ }} | ✓ | ✓ |
 | [#5370](https://github.com/vuejs/language-tools/issues/5370) — `typeof x !==` in v-if | ✓ | ✓ |
 | [#5118](https://github.com/vuejs/language-tools/issues/5118) — `?.` / `??` in {{ }} | ✓ | ✓ |
@@ -105,6 +124,8 @@ _Each hand-written **official** grammar vs Monogram's **derived** one, on the bu
 | [#4769](https://github.com/vuejs/language-tools/issues/4769) — tag name starting with `template` | ✓ | ✓ |
 | [#5701](https://github.com/vuejs/language-tools/issues/5701) — `{{` inside a `<script>` string | ✓ | ✓ |
 | [#6070](https://github.com/vuejs/language-tools/issues/6070) — capitalized component then a `<style>` block | ✓ | ✓ |
+
+</details>
 <!-- issues:end -->
 
 <sub>A sampled ledger of real tracker issues, not an exhaustive audit. Run `npm run bench:issues` to regenerate (needs the official grammars: VS Code's installed TS/JS/HTML, and the Vue fixtures — see [`test/vue-bench.ts`](test/vue-bench.ts)). Sources: [`test/issue-cases.ts`](test/issue-cases.ts), [`test/html-issue-cases.ts`](test/html-issue-cases.ts), [`test/vue-issue-cases.ts`](test/vue-issue-cases.ts).</sub>
