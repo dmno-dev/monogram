@@ -1,4 +1,4 @@
-import type { CstGrammar, RuleExpr, RuleDecl } from './types.ts';
+import type { CstGrammar, RuleExpr, RuleDecl, InjectClause } from './types.ts';
 import { collectLiterals, isKeywordLiteral } from './grammar-utils.ts';
 
 interface TmPattern {
@@ -2671,7 +2671,7 @@ interface InjectionGrammar {
 // per-clause excludes (`-source.tsx -source.js.jsx`, `-comment.block`, …) which come from DATA.
 function buildInjectionSelector(clauses: InjectClause[], exprEmbed: string): string {
   const guard = exprEmbed ? ` -${exprEmbed}` : '';
-  return clauses.map(cl => `L:${cl.scope}${(cl.excludes ?? []).map(e => ` -${e}`).join('')}${guard}`).join(', ');
+  return clauses.map(cl => `L:${cl.scope}${(cl.excludes ?? []).map((e: string) => ` -${e}`).join('')}${guard}`).join(', ');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
