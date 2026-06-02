@@ -1,7 +1,7 @@
 // issue-cases.ts — the documented microsoft/TypeScript-TmLanguage issues, as DATA.
 // Single source of truth shared by test/test-issues.ts (Monogram self-test) and
 // test/highlight-bench.ts (neutral-oracle bench). No side effects on import.
-// Each case label carries its #issue number; see docs/upstream-issues.md.
+// Each case label carries its tracker #issue number (microsoft/TypeScript-TmLanguage).
 
 export interface Check { text: string; scope: string; }
 export interface TestCase { label: string; input: string; checks: Check[]; }
