@@ -12,48 +12,14 @@
 //      highlight `const`, because the arrow body re-enters the full grammar ($self). This
 //      is the nuance a naive "drop const everywhere" gets wrong.
 //
+//  Tokenized through vscode-tmlanguage-snapshot (vuejs/language-tools' own tool) — see
+//  test/vue-grammar-harness.ts — the same engine every Vue bench now uses.
+//
 //  Run: node test/vue-interp-expr.ts
 // ─────────────────────────────────────────────────────────────────────────────
-import vsctm from 'vscode-textmate';
-import onig from 'vscode-oniguruma';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { tokenize, type TextTok } from './vue-grammar-harness.ts';
 
-const { INITIAL, Registry, parseRawGrammar } = vsctm;
-const require = createRequire(import.meta.url);
-const wasmBin = readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
-await onig.loadWASM(wasmBin.buffer.slice(wasmBin.byteOffset, wasmBin.byteOffset + wasmBin.byteLength));
-
-const read = (p: string) => readFileSync(p, 'utf-8');
-const cssStub = JSON.stringify({ scopeName: 'source.css', patterns: [{ match: '[^<]+', name: 'source.css' }] });
-const registry = new Registry({
-  onigLib: Promise.resolve({ createOnigScanner: (p: string[]) => new onig.OnigScanner(p), createOnigString: (s: string) => new onig.OnigString(s) }),
-  loadGrammar: async (sn) => {
-    if (sn === 'text.html.vue') return parseRawGrammar(read('vue.tmLanguage.json'), 'vue.json');
-    if (sn === 'text.html.basic') return parseRawGrammar(read('html.tmLanguage.json'), 'html.json');
-    if (sn === 'source.ts') return parseRawGrammar(read('typescript.tmLanguage.json'), 'ts.json');
-    if (sn === 'source.js') return parseRawGrammar(read('javascript.tmLanguage.json'), 'js.json');
-    if (sn === 'source.css') return parseRawGrammar(cssStub, 'css.json');
-    if (sn === 'vue.injection') return parseRawGrammar(read('vue.injection.tmLanguage.json'), 'inj.json');
-    return null;
-  },
-  getInjections: (sn) => (sn === 'text.html.basic' || sn === 'text.html.vue' ? ['vue.injection'] : undefined),
-});
-await registry.loadGrammar('vue.injection');
-const vue = (await registry.loadGrammar('text.html.vue'))!;
-
-interface Tok { text: string; scopes: string }
-function tokenize(src: string): Tok[] {
-  const out: Tok[] = [];
-  let stack: any = INITIAL;
-  for (const line of src.split('\n')) {
-    const r = vue.tokenizeLine(line, stack);
-    for (const t of r.tokens) { const text = line.slice(t.startIndex, t.endIndex); if (text.trim()) out.push({ text, scopes: t.scopes.join(' ') }); }
-    stack = r.ruleStack;
-  }
-  return out;
-}
-const tok = (toks: Tok[], text: string) => toks.find(t => t.text === text);
+const tok = (toks: TextTok[], text: string) => toks.find(t => t.text === text);
 
 let pass = 0, fail = 0;
 function check(label: string, cond: boolean) { if (cond) pass++; else { fail++; console.log(`✗ ${label}`); } }
@@ -61,35 +27,35 @@ const wrap = (expr: string) => `<template>\n  <p>{{ ${expr} }}</p>\n</template>`
 
 // ── statement keywords at the TOP of an interpolation must NOT be keywords ──
 {
-  const t = tokenize(wrap('const foo = 1'));
+  const t = await tokenize('mono', wrap('const foo = 1'));
   const k = tok(t, 'const');
   check('`{{ const foo }}`: const reaches the TS embed', !!k && k.scopes.includes('source.ts'));
   check('`{{ const foo }}`: const is NOT scoped storage.type (not a valid expression)', !!k && !k.scopes.includes('storage.type'));
 }
 {
-  const t = tokenize(wrap('return x'));
+  const t = await tokenize('mono', wrap('return x'));
   const k = tok(t, 'return');
   check('`{{ return x }}`: return is NOT scoped keyword.control', !!k && !k.scopes.includes('keyword.control'));
 }
 {
-  const t = tokenize(wrap('for (;;) {}'));
+  const t = await tokenize('mono', wrap('for (;;) {}'));
   const k = tok(t, 'for');
   check('`{{ for }}`: for is NOT scoped keyword.control (mixed loop group filtered)', !!k && !k.scopes.includes('keyword.control'));
 }
 
 // ── expression operators MUST still highlight ──
 {
-  const t = tokenize(wrap('typeof x'));
+  const t = await tokenize('mono', wrap('typeof x'));
   const k = tok(t, 'typeof');
   check('`{{ typeof x }}`: typeof IS scoped keyword.operator (kept)', !!k && k.scopes.includes('keyword.operator'));
 }
 {
-  const t = tokenize(wrap('x as Foo'));
+  const t = await tokenize('mono', wrap('x as Foo'));
   const k = tok(t, 'as');
   check('`{{ x as Foo }}`: as IS scoped keyword.operator (kept)', !!k && k.scopes.includes('keyword.operator'));
 }
 {
-  const t = tokenize(wrap('new Date()'));
+  const t = await tokenize('mono', wrap('new Date()'));
   const k = tok(t, 'new');
   check('`{{ new Date() }}`: new IS scoped (kept)', !!k && (k.scopes.includes('keyword.operator') || k.scopes.includes('new')));
 }
@@ -98,7 +64,7 @@ const wrap = (expr: string) => `<template>\n  <p>{{ ${expr} }}</p>\n</template>`
 // highlighting must recover after the interpolation. (The injectionSelector excludes the
 // embedded-expression scope — see gen-tm generateMarkupInjection.)
 {
-  const t = tokenize(wrap("ok ? 'a' : 'b'"));
+  const t = await tokenize('mono', wrap("ok ? 'a' : 'b'"));
   const colon = tok(t, ':');
   check('#5722: ternary `:` in {{ }} is NOT a v-bind directive shorthand', !!colon && !colon.scopes.includes('attribute-shorthand'));
   const closeTags = t.filter(tk => tk.text === 'template');
@@ -107,7 +73,7 @@ const wrap = (expr: string) => `<template>\n  <p>{{ ${expr} }}</p>\n</template>`
 
 // ── THE NUANCE: a statement inside a nested block re-enters $self → const valid there ──
 {
-  const t = tokenize(wrap('(() => { const x = 1 })()'));
+  const t = await tokenize('mono', wrap('(() => { const x = 1 })()'));
   const k = tok(t, 'const');
   check('`{{ (()=>{const x})() }}`: NESTED const IS storage.type (re-enters $self via the block)', !!k && k.scopes.includes('storage.type'));
 }

@@ -2641,6 +2641,12 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
     ],
   };
 
+  // Thin-stub injection (Vue): merge the directive/interpolation rule BODIES into THIS host
+  // grammar's repository, so the injection files can `include` them as text.html.vue#vue-directives.
+  // Repo-only — NOT pushed to `top`, so they fire via injection, not the main SFC parse.
+  const injectParts = buildMarkupInjectParts(grammar, scopeName);
+  if (injectParts) Object.assign(repository, injectParts.repo);
+
   return {
     $schema: 'https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json',
     name: grammarName,
@@ -2655,34 +2661,49 @@ interface InjectionGrammar {
   scopeName: string;
   injectionSelector: string;
   patterns: ({ include: string })[];
-  repository: Record<string, TmPattern>;
+  repository?: Record<string, TmPattern>;   // thin-stub injection files carry none (rules live in the host repo)
+}
+
+// One injectionSelector string from clauses. ALWAYS append `-exprEmbed` so the injection can't
+// re-fire inside an expression it already embedded — otherwise a directive shorthand `:` matches
+// the ternary `:` in `{{ a ? b : c }}` (its lookbehind `[\s<]` is satisfied by the space before
+// the colon) and wrecks the rest of the file (vuejs/language-tools#5722). Mirrors the official's
+// per-clause excludes (`-source.tsx -source.js.jsx`, `-comment.block`, …) which come from DATA.
+function buildInjectionSelector(clauses: InjectClause[], exprEmbed: string): string {
+  const guard = exprEmbed ? ` -${exprEmbed}` : '';
+  return clauses.map(cl => `L:${cl.scope}${(cl.excludes ?? []).map(e => ` -${e}`).join('')}${guard}`).join(', ');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Markup INJECTION grammar (Vue directives + `{{ }}` interpolation). Because a Vue
-//  `<template>` reuses the HTML grammar wholesale, Vue syntax can't be baked into HTML
-//  — it must be INJECTED onto HTML's scopes (the official Vue grammar does the same).
-//  Derived from the grammar's `markup.inject` declaration: every delimiter and scope is
-//  DATA there, so this emitter is generic. Returns null when no injection is declared.
+//  Markup INJECTION (Vue directives + `{{ }}` interpolation). A Vue `<template>` reuses the
+//  HTML grammar wholesale, so Vue syntax can't be baked in — it must be INJECTED onto HTML's
+//  scopes (the official does the same). Each CONCERN becomes one THIN-STUB file (selector +
+//  `include: <host>#<repoKey>`); the rule BODIES live in the HOST grammar's repository. This
+//  shared builder returns both halves so generateMarkupTm (merges the repo) and
+//  generateMarkupInjection (emits the files) can't drift. `mainScopeName` is the host scope
+//  (text.html.vue) the stubs include from. Matches the official topology byte-for-byte at the
+//  file level (vue-directives.json / vue-interpolations.json include text.html.vue#…).
 // ─────────────────────────────────────────────────────────────────────────────
-export function generateMarkupInjection(grammar: CstGrammar, grammarName: string): InjectionGrammar | null {
+function buildMarkupInjectParts(grammar: CstGrammar, mainScopeName: string): { repo: Record<string, TmPattern>; files: InjectionGrammar[] } | null {
   const inj = grammar.markup?.inject;
   if (!inj) return null;
   const m = grammar.markup!;
-  // Markup delimiters from config (DATA) — the injection bakes in no HTML literal, matching
-  // generateMarkupTm and the `closeMarker ?? '/'` convention.
+  // Markup delimiters from config (DATA) — bakes in no HTML literal, matching generateMarkupTm.
   const ccOpen = escapeForCharClass(m.tagOpen), ccClose = escapeForCharClass(m.tagClose), ccSlash = escapeForCharClass(m.closeMarker ?? '/');
   const assign = escapeRegex(m.attributeAssign ?? '='), assignCc = escapeForCharClass(m.attributeAssign ?? '=');
   const quotes = m.attributeQuotes ?? ['"', "'"], quoteCc = quotes.map(escapeForCharClass).join('');
   const beforeAttr = `(?<=[\\s${ccOpen}])`;          // preceded by whitespace or tag-open
   const endAttr = `(?=[\\s${ccSlash}${ccClose}])`;   // ends at whitespace / close-marker / tag-close
-  const repository: Record<string, TmPattern> = {};
-  const patterns: ({ include: string })[] = [];
+  const $schema = 'https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json';
+  const repo: Record<string, TmPattern> = {};
+  const files: InjectionGrammar[] = [];
+  const stub = (scopeName: string, selector: InjectClause[], repoKey: string): InjectionGrammar =>
+    ({ $schema, scopeName, injectionSelector: buildInjectionSelector(selector, inj.exprEmbed), patterns: [{ include: `${mainScopeName}#${repoKey}` }] });
 
   // `{{ … }}` → an embedded expression (Monogram's own TS via `exprInclude`).
   if (inj.interpolation) {
     const ip = inj.interpolation;
-    repository['interpolation'] = {
+    repo[ip.repoKey] = {
       begin: `(${escapeRegex(ip.open)})`,
       end: `(${escapeRegex(ip.close)})`,
       beginCaptures: { '1': { name: ip.beginScope } },
@@ -2690,11 +2711,11 @@ export function generateMarkupInjection(grammar: CstGrammar, grammarName: string
       contentName: inj.exprEmbed,
       patterns: [{ include: inj.exprInclude }],
     };
-    patterns.push({ include: '#interpolation' });
+    files.push(stub(ip.scopeName, ip.selector, ip.repoKey));
   }
 
-  // Directives in attribute position. Each is a begin/end region (name … then value) so
-  // the expression embed applies ONLY to a directive's value, never a plain HTML attribute.
+  // Directives in attribute position. Each is a begin/end region (name … then value) so the
+  // expression embed applies ONLY to a directive's value, never a plain HTML attribute.
   if (inj.directives) {
     const d = inj.directives;
     // `= "expr"` → the value is an EXPRESSION, CAPTURE-EMBEDDED so the embedded grammar is
@@ -2744,23 +2765,65 @@ export function generateMarkupInjection(grammar: CstGrammar, grammarName: string
       beginCaptures: { '1': { name: d.nameScope }, '2': { name: d.eqScope }, '3': { name: d.nameScope } },
       end: endAttr, patterns: values,
     });
-    repository['directives'] = { patterns: dir };
-    patterns.push({ include: '#directives' });
+    repo[d.repoKey] = { patterns: dir };
+    files.push(stub(d.scopeName, d.selector, d.repoKey));
   }
 
-  // Don't re-fire the injection INSIDE an expression it already embedded: otherwise a
-  // directive shorthand `:` matches the ternary `:` in `{{ a ? b : c }}` (its lookbehind
-  // `[\s<]` is satisfied by the space before the colon) and wrecks the rest of the file
-  // (vuejs/language-tools#5722). Exclude the embedded-expression scope — the same guard the
-  // official grammar uses (`-source.tsx -source.js.jsx`). The `{{`/value regions still START
-  // in host (text/attribute) context; only re-injection within the embed is suppressed.
-  const exclude = inj.exprEmbed ? ` -${inj.exprEmbed}` : '';
+  return { repo, files };
+}
+
+// The injection FILES (thin stubs, one per concern). The rule BODIES are merged into the host
+// grammar's repository by generateMarkupTm. Returns [] when no injection is declared.
+export function generateMarkupInjection(grammar: CstGrammar, grammarName: string): InjectionGrammar[] {
+  return buildMarkupInjectParts(grammar, grammar.scopeName ?? `text.${grammarName}`)?.files ?? [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VS Code `contributes` snippet — the packaging that wires the generated grammars into an
+//  editor (and makes Monogram's Vue a drop-in for vuejs/language-tools' files). Assembled from
+//  the grammar's declared `manifest` DATA + what the emitter already knows: the main scopeName,
+//  the injection scopeNames (generateMarkupInjection), and the standard generated filenames
+//  (matching cli's naming). Returns null when no manifest is declared.
+// ─────────────────────────────────────────────────────────────────────────────
+interface ContributesSnippet {
+  languages: { id: string; extensions: string[]; configuration: string }[];
+  grammars: { language?: string; scopeName: string; path: string; injectTo?: string[]; embeddedLanguages?: Record<string, string> }[];
+}
+export function generateContributes(grammar: CstGrammar, grammarName: string): ContributesSnippet | null {
+  const man = grammar.manifest;
+  if (!man) return null;
+  const scopeName = grammar.scopeName ?? `source.${grammarName}`;
+  const grammars: ContributesSnippet['grammars'] = [
+    // The main grammar — carries the embeddedLanguages map (template/script/style regions).
+    { language: grammarName, scopeName, path: `./${grammarName}.tmLanguage.json`,
+      ...(man.embeddedLanguages ? { embeddedLanguages: man.embeddedLanguages } : {}) },
+    // Each injection (thin stub) loads into the declared host grammars (injectTo).
+    ...generateMarkupInjection(grammar, grammarName).map(inj => ({
+      scopeName: inj.scopeName, path: `./${inj.scopeName}.tmLanguage.json`,
+      ...(man.injectTo ? { injectTo: man.injectTo } : {}),
+    })),
+    // Alias grammars (e.g. text.html.derivative) — re-exports, no language/injectTo.
+    ...(grammar.aliasScopes ?? []).map(a => ({ scopeName: a.scope, path: `./${a.file}.tmLanguage.json` })),
+  ];
+  return {
+    languages: [{ id: grammarName, extensions: man.extensions ?? [`.${grammarName}`], configuration: `./${grammarName}.language-configuration.json` }],
+    grammars,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Alias grammar — a thin TextMate grammar that RE-EXPOSES a base grammar under another
+//  scopeName by `include`-ing it wholesale. Monogram's `text.html.derivative` is exactly
+//  this: the embedded-HTML-fragment scope that Vue/markdown/pug injections target, with the
+//  same rules as text.html.basic. (VS Code ships html-derivative as a separate grammar for
+//  the same reason; its body is also just the base's rules — for us there is no `invalid`
+//  subset to strip, so a whole-grammar include is the faithful equivalent.)
+// ─────────────────────────────────────────────────────────────────────────────
+export function generateAliasGrammar(baseScopeName: string, aliasScope: string): { $schema: string; scopeName: string; patterns: ({ include: string })[] } {
   return {
     $schema: 'https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json',
-    scopeName: `${grammarName}.injection`,
-    injectionSelector: inj.into.map(s => `L:${s}${exclude}`).join(', '),
-    patterns,
-    repository,
+    scopeName: aliasScope,
+    patterns: [{ include: baseScopeName }],
   };
 }
 

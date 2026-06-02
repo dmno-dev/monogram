@@ -11,68 +11,22 @@
 //  (instanceof / typeof / ?? / ?. / => / <): Monogram embeds its OWN proven TS
 //  (source.ts#expression) and gets them free; the official patched each one over time.
 //
+//  Both grammars are tokenized through `vscode-tmlanguage-snapshot` — vuejs/language-tools'
+//  OWN grammar-test tool (see test/vue-grammar-harness.ts) — so the head-to-head is faithful
+//  to how the official grammar is actually tested.
+//
 //  Run: node test/vue-issues.ts   (needs test/fixtures/vue-official — see vue-bench.ts header)
 // ─────────────────────────────────────────────────────────────────────────────
-import vsctm from 'vscode-textmate';
-import onig from 'vscode-oniguruma';
-import { readFileSync, existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { cases } from './vue-issue-cases.ts';
+import { scopeLookup, officialAvailable } from './vue-grammar-harness.ts';
 
-const { INITIAL, Registry, parseRawGrammar } = vsctm;
-const require = createRequire(import.meta.url);
-const FIX = 'test/fixtures/vue-official';
-if (!existsSync(`${FIX}/vue.tmLanguage.json`)) { console.log('⊘ Skipped: official Vue grammars not found (see test/vue-bench.ts header to fetch).'); process.exit(0); }
-const wasmBin = readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
-await onig.loadWASM(wasmBin.buffer.slice(wasmBin.byteOffset, wasmBin.byteOffset + wasmBin.byteLength));
-const onigLib = Promise.resolve({ createOnigScanner: (p: string[]) => new onig.OnigScanner(p), createOnigString: (s: string) => new onig.OnigString(s) });
-const read = (p: string) => readFileSync(p, 'utf-8');
-const stub = (sn: string) => parseRawGrammar(JSON.stringify({ scopeName: sn, patterns: [{ match: '[^\\n]+', name: sn }] }), `${sn}.json`);
+if (!officialAvailable) { console.log('⊘ Skipped: official Vue grammars not found (see test/vue-bench.ts header to fetch).'); process.exit(0); }
 
-function mkRegistry(official: boolean) {
-  return new Registry({
-    onigLib,
-    loadGrammar: async (sn) => {
-      if (sn === 'text.html.vue') return parseRawGrammar(read(official ? `${FIX}/vue.tmLanguage.json` : 'vue.tmLanguage.json'), 'vue.json');
-      if (sn === 'text.html.basic') return parseRawGrammar(read('html.tmLanguage.json'), 'html.json');
-      if (sn === 'source.ts') return parseRawGrammar(read('typescript.tmLanguage.json'), 'ts.json');
-      if (sn === 'source.js') return parseRawGrammar(read('javascript.tmLanguage.json'), 'js.json');
-      if (sn === 'vue.injection') return parseRawGrammar(read('vue.injection.tmLanguage.json'), 'inj.json');
-      if (sn === 'vue.directives') return parseRawGrammar(read(`${FIX}/vue-directives.json`), 'dir.json');
-      if (sn === 'vue.interpolations') return parseRawGrammar(read(`${FIX}/vue-interpolations.json`), 'int.json');
-      if (sn.startsWith('source.')) return stub(sn);
-      return null;  // text.* → no-op include (text.html.basic does the parsing)
-    },
-    getInjections: (sn) => official
-      ? (sn === 'text.html.vue' ? ['vue.directives', 'vue.interpolations'] : undefined)
-      : ((sn === 'text.html.basic' || sn === 'text.html.vue') ? ['vue.injection'] : undefined),
-  });
-}
-async function loadVue(official: boolean) {
-  const reg = mkRegistry(official);
-  if (official) { await reg.loadGrammar('vue.directives'); await reg.loadGrammar('vue.interpolations'); }
-  else { await reg.loadGrammar('vue.injection'); }
-  return (await reg.loadGrammar('text.html.vue'))!;
-}
-const monoVue = await loadVue(false), offVue = await loadVue(true);
-
-function scopeLookup(grammar: any, src: string): (offset: number) => string {
-  const lines = src.split('\n'); const lineStart: number[] = []; let acc = 0;
-  for (const l of lines) { lineStart.push(acc); acc += l.length + 1; }
-  const lineToks: any[][] = []; let stack: any = INITIAL;
-  for (const l of lines) { const r = grammar.tokenizeLine(l, stack); lineToks.push(r.tokens); stack = r.ruleStack; }
-  return (offset: number) => {
-    let li = 0; while (li + 1 < lineStart.length && lineStart[li + 1] <= offset) li++;
-    const col = offset - lineStart[li];
-    for (const t of lineToks[li] ?? []) if (col >= t.startIndex && col < t.endIndex) return t.scopes.join(' ');
-    return '';
-  };
-}
-// at(text[, nth]) → scope string at the middle of the nth occurrence of `text`.
-function makeAt(look: (o: number) => string, src: string) {
+// at(text[, nth]) → scopes (space-joined) at the middle of the nth occurrence of `text`.
+function makeAt(look: (o: number) => string[], src: string) {
   return (text: string, nth = 0) => {
     let i = -1; for (let k = 0; k <= nth; k++) i = src.indexOf(text, i + 1);
-    return i < 0 ? '__NOT_FOUND__' : look(i + Math.floor(text.length / 2));
+    return i < 0 ? '__NOT_FOUND__' : look(i + Math.floor(text.length / 2)).join(' ');
   };
 }
 
@@ -93,7 +47,7 @@ const expect: Record<string, { mono: boolean; off: boolean }> = {
 
 let mPass = 0, oPass = 0; const rows: string[] = []; const deviations: string[] = [];
 for (const c of cases) {
-  const mAt = makeAt(scopeLookup(monoVue, c.src), c.src), oAt = makeAt(scopeLookup(offVue, c.src), c.src);
+  const mAt = makeAt(await scopeLookup('mono', c.src), c.src), oAt = makeAt(await scopeLookup('off', c.src), c.src);
   const mOk = c.checks.every(ch => ch.want(mAt(ch.at, ch.nth)));
   const oOk = c.checks.every(ch => ch.want(oAt(ch.at, ch.nth)));
   if (mOk) mPass++; if (oOk) oPass++;
@@ -105,7 +59,8 @@ for (const c of cases) {
 
 console.log('\n══════════════════════════════════════════════════════════════════════');
 console.log('  REAL reported highlighting issues vs vuejs/language-tools vue.tmLanguage.json');
-console.log('  (both grammars CURRENT; both embed Monogram\'s source.ts — isolates the Vue layer)');
+console.log('  (tokenized via vscode-tmlanguage-snapshot — their own tool; both embed');
+console.log('   Monogram\'s source.ts, so this isolates the Vue layer)');
 console.log('══════════════════════════════════════════════════════════════════════');
 console.log(`  ${'issue'.padEnd(16)} ${'Monogram'.padEnd(9)} ${'official'.padEnd(9)} title`);
 for (const r of rows) console.log(r);

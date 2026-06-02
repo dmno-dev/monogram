@@ -30,7 +30,7 @@ jobs:
       - name: Generate editor artifacts (must be in sync)
         run: |
           npm run gen
-          git diff --exit-code -- '*.tmLanguage.json' '*.language-configuration.json' '*.monarch.json' '*.cst-types.ts' tree-sitter
+          git diff --exit-code -- '*.tmLanguage.json' '*.language-configuration.json' '*.monarch.json' '*.cst-types.ts' '*.contributes.json' tree-sitter
 
       # Self-contained suites (each exits non-zero on failure). The conformance /
       # coverage / bench tools needing the external TypeScript corpus or VS Code's

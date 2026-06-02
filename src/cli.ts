@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { generateTmLanguage, generateMarkupInjection } from './gen-tm.ts';
+import { generateTmLanguage, generateMarkupInjection, generateAliasGrammar, generateContributes } from './gen-tm.ts';
 import { generateLanguageConfig } from './gen-vscode-config.ts';
 import { generateTreeSitter } from './gen-treesitter.ts';
 import { generateMonarch } from './gen-monarch.ts';
@@ -50,13 +50,33 @@ const outPath = join(dirname(file), `${langName}.tmLanguage.json`);
 writeFileSync(outPath, JSON.stringify(tm, null, 2) + '\n');
 console.log(`\n→ Generated ${outPath}`);
 
-// A markup-injection grammar (Vue directives + interpolation), when the grammar declares
-// `markup.inject` — injected onto the host (HTML) scopes, like the official Vue grammar.
-const injection = generateMarkupInjection(grammar, langName);
-if (injection) {
-  const injPath = join(dirname(file), `${langName}.injection.tmLanguage.json`);
+// Markup-injection grammars (Vue directives + interpolation), when the grammar declares
+// `markup.inject` — one THIN-STUB file per concern, injected onto the host (HTML) scopes,
+// matching the official Vue topology (vue-directives.json / vue-interpolations.json). The
+// rule bodies live in the main grammar's repository; these files just include them.
+for (const injection of generateMarkupInjection(grammar, langName)) {
+  const injPath = join(dirname(file), `${injection.scopeName}.tmLanguage.json`);
   writeFileSync(injPath, JSON.stringify(injection, null, 2) + '\n');
   console.log(`→ Generated ${injPath}`);
+}
+
+// Alias grammars — extra files that re-expose this grammar under another scopeName (e.g.
+// text.html.derivative for embedded HTML fragments). One thin `{scopeName, include}` file each.
+for (const alias of grammar.aliasScopes ?? []) {
+  const aliasGrammar = generateAliasGrammar(grammar.scopeName ?? `source.${langName}`, alias.scope);
+  const aliasPath = join(dirname(file), `${alias.file}.tmLanguage.json`);
+  writeFileSync(aliasPath, JSON.stringify(aliasGrammar, null, 2) + '\n');
+  console.log(`→ Generated ${aliasPath}`);
+}
+
+// A VS Code `contributes` snippet — packaging that wires all the generated grammars (main +
+// injections + aliases) into an editor. For Vue this is what makes the files a drop-in for
+// vuejs/language-tools'; emitted only when the grammar declares a `manifest`.
+const contributes = generateContributes(grammar, langName);
+if (contributes) {
+  const cPath = join(dirname(file), `${langName}.contributes.json`);
+  writeFileSync(cPath, JSON.stringify({ contributes }, null, 2) + '\n');
+  console.log(`→ Generated ${cPath}`);
 }
 
 // Generate VS Code language configuration (editor behaviors)

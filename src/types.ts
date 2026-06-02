@@ -113,16 +113,33 @@ export interface MarkupEntity {
   punctuationScope: string;  // scope for the prefix/terminator punctuation, e.g. punctuation.definition.entity.html
 }
 
-/** A markup-injection layer (e.g. Vue directives + interpolation) injected onto a host
- *  grammar's scopes. All scope names + delimiters are DATA, so the emitter is generic. */
+/** One injectionSelector clause: a host scope plus the scopes that disqualify it, e.g.
+ *  `{scope:'text.pug', excludes:['comment','string.comment']}` → `L:text.pug -comment -string.comment`.
+ *  The emitter always appends `-exprEmbed` (so the injection can't re-fire inside an expression
+ *  it already embedded — the #5722 guard). */
+export interface InjectClause { scope: string; excludes?: string[] }
+
+/** A markup-injection layer (Vue directives + `{{ }}` interpolation) injected onto a host
+ *  grammar's scopes. Each CONCERN (interpolation / directives) becomes one THIN-STUB grammar
+ *  file: its `scopeName` + `selector`, with `patterns:[{include: <host>#<repoKey>}]`. The rule
+ *  BODIES live in the host (main) grammar's repository under `repoKey` — exactly the official
+ *  Vue topology (`vue-directives.json` / `vue-interpolations.json` include `text.html.vue#…`),
+ *  so the files are byte-diffable against it. All scope names + delimiters are DATA. */
 export interface MarkupInject {
-  into: string[];        // host scopes to inject onto (e.g. ['text.html.basic']) → L:<scope>
   exprEmbed: string;     // scope wrapping an embedded expression (e.g. source.ts.embedded.html.vue)
-  exprInclude: string;   // grammar to tokenize the expression (e.g. source.ts — Monogram's own TS)
-  // `{{ … }}` interpolation in text.
-  interpolation?: { open: string; close: string; beginScope: string; endScope: string };
-  // Directives in tag-attribute position.
+  exprInclude: string;   // grammar to tokenize the expression (e.g. source.ts#expression — Monogram's own TS)
+  // `{{ … }}` interpolation in text content → injected onto the embedded-HTML scope.
+  interpolation?: {
+    scopeName: string;        // emitted file's scopeName, e.g. vue.interpolations
+    repoKey: string;          // main-grammar repository key the stub includes, e.g. vue-interpolations
+    selector: InjectClause[]; // host scopes (e.g. text.html.derivative / markdown / pug)
+    open: string; close: string; beginScope: string; endScope: string;
+  };
+  // Directives in tag-attribute position → injected onto the tag scope.
   directives?: {
+    scopeName: string;        // emitted file's scopeName, e.g. vue.directives
+    repoKey: string;          // main-grammar repository key the stub includes, e.g. vue-directives
+    selector: InjectClause[]; // host scopes (e.g. meta.tag / meta.element)
     control: { match: string; scope: string }[];  // e.g. [{match:'v-for', scope:'keyword.control.loop.vue'}, …]
     shorthand: { char: string; scope: string }[];  // e.g. [{char:':', scope:'punctuation.attribute-shorthand.bind.html.vue'}, …]
     prefix: string;        // long-form directive prefix, e.g. 'v-'
@@ -185,4 +202,28 @@ export interface CstGrammar {
   scopeName?: string;  // declared TextMate scope name (e.g. source.ts); its suffix drives every scope's language tag
   markup?: MarkupConfig;  // opt-in markup-mode tokenization (HTML/Vue); absent for token-stream languages
   expressionRule?: string;  // name of the rule that produces an EXPRESSION; lets gen-tm derive a `#expression` sub-grammar (for expression-only embeds, e.g. Vue `{{ }}`)
+  // Extra TextMate grammars that just RE-EXPOSE this one under another scopeName (thin
+  // `{scopeName, patterns:[{include: <this.scopeName>}]}` wrappers). HTML declares
+  // text.html.derivative this way — the embedded-fragment scope Vue/markdown/pug inject onto;
+  // VS Code ships it as a separate grammar for the same reason. gen-tm emits one file each.
+  aliasScopes?: { scope: string; file: string }[];
+  // VS Code extension `contributes` data — packaging info a consumer needs to wire the
+  // generated grammars into an editor (and to make Monogram's Vue a true drop-in for
+  // vuejs/language-tools' files). All DATA the grammar declares; gen emits a pasteable
+  // `<name>.contributes.json` snippet. Absent → no manifest emitted.
+  manifest?: ContributesManifest;
+}
+
+/** VS Code `contributes` packaging for a grammar. The emitter pairs this with what it
+ *  already knows (scopeName, name, the injection scopeNames, the generated filenames) to
+ *  build a `{languages, grammars}` snippet — so the only DATA here is what isn't derivable. */
+export interface ContributesManifest {
+  extensions?: string[];                       // language file extensions (e.g. ['.vue']); default ['.' + name]
+  // Host grammars each injection loads into (VS Code `injectTo`). For Vue: the SFC itself plus
+  // the places a Vue template appears — text.html.vue / markdown / derivative / pug. This is a
+  // packaging fact (which document languages activate the injection), distinct from a selector.
+  injectTo?: string[];
+  // scope → VS Code language id for the main grammar's embedded regions (template/script/style),
+  // so the editor knows each embed's language for IntelliSense / indentation / comments.
+  embeddedLanguages?: Record<string, string>;
 }

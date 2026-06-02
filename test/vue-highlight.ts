@@ -8,44 +8,12 @@
 //  Increment 2 (Vue directives v-if/:bind/@event/#slot + {{ }} interpolation) is not
 //  covered here yet — :class / {{ }} inside <template> are still plain HTML.
 //
+//  Tokenized through vscode-tmlanguage-snapshot (vuejs/language-tools' own tool) — see
+//  test/vue-grammar-harness.ts — the same engine every Vue bench now uses.
+//
 //  Run: node test/vue-highlight.ts
 // ─────────────────────────────────────────────────────────────────────────────
-import vsctm from 'vscode-textmate';
-import onig from 'vscode-oniguruma';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-
-const { INITIAL, Registry, parseRawGrammar } = vsctm;
-const require = createRequire(import.meta.url);
-const wasmBin = readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
-await onig.loadWASM(wasmBin.buffer.slice(wasmBin.byteOffset, wasmBin.byteOffset + wasmBin.byteLength));
-
-const read = (p: string) => readFileSync(p, 'utf-8');
-const cssStub = JSON.stringify({ scopeName: 'source.css', patterns: [{ match: '[^<]+', name: 'source.css' }] });
-const registry = new Registry({
-  onigLib: Promise.resolve({ createOnigScanner: (p: string[]) => new onig.OnigScanner(p), createOnigString: (s: string) => new onig.OnigString(s) }),
-  loadGrammar: async (sn) => {
-    if (sn === 'text.html.vue') return parseRawGrammar(read('vue.tmLanguage.json'), 'vue.json');
-    if (sn === 'text.html.basic') return parseRawGrammar(read('html.tmLanguage.json'), 'html.json');   // Monogram's HTML
-    if (sn === 'source.js') return parseRawGrammar(read('javascript.tmLanguage.json'), 'js.json');     // Monogram's JS
-    if (sn === 'source.ts') return parseRawGrammar(read('typescript.tmLanguage.json'), 'ts.json');     // Monogram's TS
-    if (sn === 'source.css') return parseRawGrammar(cssStub, 'css.json');
-    return null;
-  },
-});
-const vue = (await registry.loadGrammar('text.html.vue'))!;
-
-interface Tok { text: string; scopes: string }
-function tokenize(src: string): Tok[] {
-  const out: Tok[] = [];
-  let stack: any = INITIAL;
-  for (const line of src.split('\n')) {
-    const r = vue.tokenizeLine(line, stack);
-    for (const t of r.tokens) { const text = line.slice(t.startIndex, t.endIndex); if (text.trim()) out.push({ text, scopes: t.scopes.join(' ') }); }
-    stack = r.ruleStack;
-  }
-  return out;
-}
+import { tokenize } from './vue-grammar-harness.ts';
 
 const sfc = [
   '<template>',
@@ -60,7 +28,7 @@ const sfc = [
   '.box { color: red }',
   '</style>',
 ].join('\n');
-const toks = tokenize(sfc);
+const toks = await tokenize('mono', sfc);
 
 let pass = 0, fail = 0;
 const find = (text: string, pred: (s: string) => boolean) => toks.find(t => t.text === text && pred(t.scopes));
@@ -73,9 +41,10 @@ check('<template> block → meta.template.vue', !!find('template', s => s.includ
 check('<script> block → meta.script.vue', !!find('script', s => s.includes('meta.script.vue') && s.includes('entity.name.tag.vue')));
 check('<style> block → meta.style.vue', !!find('style', s => s.includes('meta.style.vue') && s.includes('entity.name.tag.vue')));
 
-// ── <template> body is Monogram's HTML ──
-check('<template> body embeds HTML (div → entity.name.tag.html)', !!find('div', s => s.includes('text.html.basic') && s.includes('entity.name.tag.html')));
-check('<template> body: attribute → HTML attribute-name', !!find('class', s => s.includes('text.html.basic') && s.includes('entity.other.attribute-name')));
+// ── <template> body is Monogram's HTML, embedded as text.html.derivative (the embedded-HTML-
+//    fragment scope; Monogram's own HTML rules run under it and emit entity.name.tag.html) ──
+check('<template> body embeds HTML (div → entity.name.tag.html)', !!find('div', s => s.includes('text.html.derivative') && s.includes('entity.name.tag.html')));
+check('<template> body: attribute → HTML attribute-name', !!find('class', s => s.includes('text.html.derivative') && s.includes('entity.other.attribute-name')));
 
 // ── <script> body is Monogram's JS (the headline: < is a JS operator, not a tag) ──
 check('<script> body embeds JS (const → storage.type.js)', !!find('const', s => s.includes('source.js') && s.includes('storage.type')));
@@ -86,7 +55,7 @@ check('<style> body embeds CSS', toks.some(t => t.text.includes('color') && t.sc
 
 // ── lang= selection: <script setup lang="ts"> embeds Monogram's TS (the headline) ──
 {
-  const ts = tokenize('<script setup lang="ts">const x: number = 1;</script>');
+  const ts = await tokenize('mono', '<script setup lang="ts">const x: number = 1;</script>');
   const f = (text: string, pred: (s: string) => boolean) => ts.find(t => t.text === text && pred(t.scopes));
   check('<script lang="ts"> body → Monogram TS (const → storage.type.ts)', !!f('const', s => s.includes('source.ts') && s.includes('storage.type')));
   check('<script lang="ts"> TS type annotation `:` (TS-only syntax)', !!f(':', s => s.includes('source.ts') && s.includes('type.annotation')));

@@ -20,6 +20,7 @@ import { createRequire } from 'node:module';
 import { tests as tsTests } from './issue-cases.ts';
 import { cases as htmlCases } from './html-issue-cases.ts';
 import { cases as vueCases } from './vue-issue-cases.ts';
+import { scopeLookup as vueScopeLookup, officialAvailable as vueOfficialAvailable } from './vue-grammar-harness.ts';
 
 const { INITIAL, Registry, parseRawGrammar } = vsctm;
 const require = createRequire(import.meta.url);
@@ -35,7 +36,6 @@ const official = {
   js: process.env.MONOGRAM_OFFICIAL_JS ?? `${VSCODE}/javascript/syntaxes/JavaScript.tmLanguage.json`,
   css: process.env.MONOGRAM_OFFICIAL_CSS ?? `${VSCODE}/css/syntaxes/css.tmLanguage.json`,
 };
-const VUEFIX = 'test/fixtures/vue-official';
 
 function scopeAtFns(grammar: any, src: string) {
   const lines = src.split('\n'); const start: number[] = []; let acc = 0;
@@ -86,28 +86,21 @@ async function gradeHtml(): Promise<Row[] | null> {
   return htmlCases.map(c => ({ id: c.id, title: c.title, mono: c.want(scopeAtFns(mono, c.src)(c.at, c.nth)), off: c.want(scopeAtFns(off, c.src)(c.at, c.nth)) }));
 }
 
-// ── Vue: full stack; cases are {id, title, src, checks:[{at, want}]}.
+// ── Vue: full stack; cases are {id, title, src, checks:[{at, want}]}. Tokenized through
+// vscode-tmlanguage-snapshot (vuejs/language-tools' own tool) — see vue-grammar-harness.ts —
+// the SAME engine as test/vue-issues.ts, so the README table and the bench can't drift.
 async function gradeVue(): Promise<Row[] | null> {
-  if (!existsSync(`${VUEFIX}/vue.tmLanguage.json`)) return null;
-  const mk = (off: boolean) => new Registry({
-    onigLib,
-    loadGrammar: async (sn) => {
-      if (sn === 'text.html.vue') return parseRawGrammar(read(off ? `${VUEFIX}/vue.tmLanguage.json` : 'vue.tmLanguage.json'), 'vue.json');
-      if (sn === 'text.html.basic') return parseRawGrammar(read('html.tmLanguage.json'), 'html.json');
-      if (sn === 'source.ts') return parseRawGrammar(read('typescript.tmLanguage.json'), 'ts.json');
-      if (sn === 'source.js') return parseRawGrammar(read('javascript.tmLanguage.json'), 'js.json');
-      if (sn === 'vue.injection') return parseRawGrammar(read('vue.injection.tmLanguage.json'), 'inj.json');
-      if (sn === 'vue.directives') return parseRawGrammar(read(`${VUEFIX}/vue-directives.json`), 'dir.json');
-      if (sn === 'vue.interpolations') return parseRawGrammar(read(`${VUEFIX}/vue-interpolations.json`), 'int.json');
-      if (sn.startsWith('source.')) return stub(sn);
-      return null;
-    },
-    getInjections: (sn) => off ? (sn === 'text.html.vue' ? ['vue.directives', 'vue.interpolations'] : undefined) : ((sn === 'text.html.basic' || sn === 'text.html.vue') ? ['vue.injection'] : undefined),
-  });
-  const load = async (off: boolean) => { const r = mk(off); if (off) { await r.loadGrammar('vue.directives'); await r.loadGrammar('vue.interpolations'); } else { await r.loadGrammar('vue.injection'); } return (await r.loadGrammar('text.html.vue'))!; };
-  const mono = await load(false), off = await load(true);
-  const pass = (g: any, c: typeof vueCases[number]) => { const at = scopeAtFns(g, c.src); return c.checks.every(ch => ch.want(at(ch.at, ch.nth))); };
-  return vueCases.map(c => ({ id: c.id, title: c.title, mono: pass(mono, c), off: pass(off, c) }));
+  if (!vueOfficialAvailable) return null;
+  const makeAt = (look: (o: number) => string[], src: string) => (text: string, nth = 0) => {
+    let i = -1; for (let k = 0; k <= nth; k++) i = src.indexOf(text, i + 1);
+    return i < 0 ? '' : look(i + Math.floor(text.length / 2)).join(' ');
+  };
+  const rows: Row[] = [];
+  for (const c of vueCases) {
+    const mAt = makeAt(await vueScopeLookup('mono', c.src), c.src), oAt = makeAt(await vueScopeLookup('off', c.src), c.src);
+    rows.push({ id: c.id, title: c.title, mono: c.checks.every(ch => ch.want(mAt(ch.at, ch.nth))), off: c.checks.every(ch => ch.want(oAt(ch.at, ch.nth))) });
+  }
+  return rows;
 }
 
 const langs: { name: string; key: string; opponent: string; rows: Row[] | null }[] = [

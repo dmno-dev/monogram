@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  vue-directives.ts — gates Vue increment 2: the DERIVED injection grammar
-//  (vue.injection.tmLanguage.json) adds directives (v-for / v-if / :bind / @event /
+//  (vue.directives.json / vue.interpolations.json) adds directives (v-for / v-if / :bind / @event /
 //  #slot) and {{ }} interpolation ONTO the HTML scopes inside a <template>. Because the
 //  template reuses HTML wholesale, this is injection — exactly the official architecture.
 //  Directive values and interpolation embed Monogram's OWN TS grammar (source.ts), so
@@ -9,47 +9,12 @@
 //  Like a real editor's injectTo contribution, the injection grammar is loaded into the
 //  registry and registered (getInjections) so it applies to the HTML scopes.
 //
+//  Tokenized through vscode-tmlanguage-snapshot (vuejs/language-tools' own tool) — see
+//  test/vue-grammar-harness.ts — the same engine every Vue bench now uses.
+//
 //  Run: node test/vue-directives.ts
 // ─────────────────────────────────────────────────────────────────────────────
-import vsctm from 'vscode-textmate';
-import onig from 'vscode-oniguruma';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-
-const { INITIAL, Registry, parseRawGrammar } = vsctm;
-const require = createRequire(import.meta.url);
-const wasmBin = readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
-await onig.loadWASM(wasmBin.buffer.slice(wasmBin.byteOffset, wasmBin.byteOffset + wasmBin.byteLength));
-
-const read = (p: string) => readFileSync(p, 'utf-8');
-const cssStub = JSON.stringify({ scopeName: 'source.css', patterns: [{ match: '[^<]+', name: 'source.css' }] });
-const registry = new Registry({
-  onigLib: Promise.resolve({ createOnigScanner: (p: string[]) => new onig.OnigScanner(p), createOnigString: (s: string) => new onig.OnigString(s) }),
-  loadGrammar: async (sn) => {
-    if (sn === 'text.html.vue') return parseRawGrammar(read('vue.tmLanguage.json'), 'vue.json');
-    if (sn === 'text.html.basic') return parseRawGrammar(read('html.tmLanguage.json'), 'html.json');
-    if (sn === 'source.ts') return parseRawGrammar(read('typescript.tmLanguage.json'), 'ts.json');   // Monogram's TS
-    if (sn === 'source.js') return parseRawGrammar(read('javascript.tmLanguage.json'), 'js.json');
-    if (sn === 'source.css') return parseRawGrammar(cssStub, 'css.json');
-    if (sn === 'vue.injection') return parseRawGrammar(read('vue.injection.tmLanguage.json'), 'inj.json');
-    return null;
-  },
-  getInjections: (sn) => (sn === 'text.html.basic' || sn === 'text.html.vue' ? ['vue.injection'] : undefined),
-});
-await registry.loadGrammar('vue.injection');                 // register the injection (like injectTo)
-const vue = (await registry.loadGrammar('text.html.vue'))!;
-
-interface Tok { text: string; scopes: string }
-function tokenize(src: string): Tok[] {
-  const out: Tok[] = [];
-  let stack: any = INITIAL;
-  for (const line of src.split('\n')) {
-    const r = vue.tokenizeLine(line, stack);
-    for (const t of r.tokens) { const text = line.slice(t.startIndex, t.endIndex); if (text.trim()) out.push({ text, scopes: t.scopes.join(' ') }); }
-    stack = r.ruleStack;
-  }
-  return out;
-}
+import { tokenize } from './vue-grammar-harness.ts';
 
 const sfc = [
   '<template>',
@@ -61,7 +26,7 @@ const sfc = [
   '  </ul>',
   '</template>',
 ].join('\n');
-const toks = tokenize(sfc);
+const toks = await tokenize('mono', sfc);
 
 let pass = 0, fail = 0;
 const find = (text: string, pred: (s: string) => boolean) => toks.find(t => t.text === text && pred(t.scopes));

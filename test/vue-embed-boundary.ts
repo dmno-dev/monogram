@@ -14,55 +14,21 @@
 //            EMBEDDED into a `([^"]*)` span, so the embedded grammar is clipped at the quote
 //            (a capture's text range can't be crossed). GATED below.
 //
+//  Tokenized through vscode-tmlanguage-snapshot (vuejs/language-tools' own tool) — see
+//  test/vue-grammar-harness.ts — the same engine every Vue bench now uses.
+//
 //  Run: node test/vue-embed-boundary.ts
 // ─────────────────────────────────────────────────────────────────────────────
-import vsctm from 'vscode-textmate';
-import onig from 'vscode-oniguruma';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { tokenize, type TextTok } from './vue-grammar-harness.ts';
 
-const { INITIAL, Registry, parseRawGrammar } = vsctm;
-const require = createRequire(import.meta.url);
-const wasmBin = readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
-await onig.loadWASM(wasmBin.buffer.slice(wasmBin.byteOffset, wasmBin.byteOffset + wasmBin.byteLength));
-
-const read = (p: string) => readFileSync(p, 'utf-8');
-const cssStub = JSON.stringify({ scopeName: 'source.css', patterns: [{ match: '[^<]+', name: 'source.css' }] });
-const registry = new Registry({
-  onigLib: Promise.resolve({ createOnigScanner: (p: string[]) => new onig.OnigScanner(p), createOnigString: (s: string) => new onig.OnigString(s) }),
-  loadGrammar: async (sn) => {
-    if (sn === 'text.html.vue') return parseRawGrammar(read('vue.tmLanguage.json'), 'vue.json');
-    if (sn === 'text.html.basic') return parseRawGrammar(read('html.tmLanguage.json'), 'html.json');
-    if (sn === 'source.ts') return parseRawGrammar(read('typescript.tmLanguage.json'), 'ts.json');   // Monogram's TS
-    if (sn === 'source.js') return parseRawGrammar(read('javascript.tmLanguage.json'), 'js.json');
-    if (sn === 'source.css') return parseRawGrammar(cssStub, 'css.json');
-    if (sn === 'vue.injection') return parseRawGrammar(read('vue.injection.tmLanguage.json'), 'inj.json');
-    return null;
-  },
-  getInjections: (sn) => (sn === 'text.html.basic' || sn === 'text.html.vue' ? ['vue.injection'] : undefined),
-});
-await registry.loadGrammar('vue.injection');
-const vue = (await registry.loadGrammar('text.html.vue'))!;
-
-interface Tok { text: string; scopes: string }
-function tokenize(src: string): Tok[] {
-  const out: Tok[] = [];
-  let stack: any = INITIAL;
-  for (const line of src.split('\n')) {
-    const r = vue.tokenizeLine(line, stack);
-    for (const t of r.tokens) { const text = line.slice(t.startIndex, t.endIndex); if (text.trim()) out.push({ text, scopes: t.scopes.join(' ') }); }
-    stack = r.ruleStack;
-  }
-  return out;
-}
-const find = (toks: Tok[], text: string, pred: (s: string) => boolean) => toks.find(t => t.text === text && pred(t.scopes));
+const find = (toks: TextTok[], text: string, pred: (s: string) => boolean) => toks.find(t => t.text === text && pred(t.scopes));
 
 let pass = 0, fail = 0;
 function check(label: string, cond: boolean) { if (cond) pass++; else { fail++; console.log(`✗ ${label}`); } }
 
 // ── #1666 (GATED): the embed must END at </script> even with an open trailing type ──
 {
-  const t = tokenize('<script lang="ts">\ntype Foo = 123\n</script>\n<template><b /></template>');
+  const t = await tokenize('mono', '<script lang="ts">\ntype Foo = 123\n</script>\n<template><b /></template>');
   check('#1666: the trailing `type Foo = 123` highlights as TS', !!find(t, 'type', s => s.includes('source.ts') && s.includes('storage.type')));
   // the key fix: </script> ends the embed → the following <template> block is NOT swallowed into source.ts
   check('#1666: </script> ends the embed — the following <template> is NOT TS', !t.some(tk => tk.text === 'template' && tk.scopes.includes('source.ts')));
@@ -75,7 +41,7 @@ function check(label: string, cond: boolean) { if (cond) pass++; else { fail++; 
 //    the cast stops, the `"` stays a string end, and `>ok</b>` recovers to HTML. Once thought
 //    a pure-TM ceiling (semantic/Volar only); it isn't — capture-embed bounds it. ──
 {
-  const t = tokenize('<template>\n  <b :value="msg as string">ok</b>\n</template>\n<script>const z = 1</script>');
+  const t = await tokenize('mono', '<template>\n  <b :value="msg as string">ok</b>\n</template>\n<script>const z = 1</script>');
   check('#5012: `msg as string` embeds as TS (the value)', !!find(t, 'as', s => s.includes('source.ts')));
   check('#5012 FIXED: the closing `"` is not eaten — `ok` after the value is HTML, not TS', !t.some(tk => tk.text === 'ok' && tk.scopes.includes('source.ts')));
   check('#5012 FIXED: `</b>` after the value recovers to HTML', !!find(t, 'b', s => s.includes('entity.name.tag') && !s.includes('source.ts')));
@@ -86,9 +52,9 @@ function check(label: string, cond: boolean) { if (cond) pass++; else { fail++; 
 //    still embed the body — a TextMate `begin` is single-line, so this needs the dedicated
 //    multi-line-start-tag region (gen-tm emitRawMultiline), with lang= detected across lines. ──
 {
-  const t = tokenize('<script\n  lang="ts"\n>\nconst mlx = 1\n</script>');
+  const t = await tokenize('mono', '<script\n  lang="ts"\n>\nconst mlx = 1\n</script>');
   check('#3999: multi-line <script lang="ts"> start tag — body still embeds as TS', !!find(t, 'const', s => s.includes('source.ts') && s.includes('storage.type')));
-  const t2 = tokenize('<script\n  setup\n>\nvar mly = 1\n</script>');
+  const t2 = await tokenize('mono', '<script\n  setup\n>\nvar mly = 1\n</script>');
   check('#3999: multi-line <script> with no lang — body embeds as JS (default)', !!find(t2, 'var', s => s.includes('source.js')));
 }
 

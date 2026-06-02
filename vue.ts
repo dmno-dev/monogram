@@ -24,34 +24,76 @@ export default defineGrammar({
   rules,
   entry: rules.Document,
   scopes,
+  // VS Code `contributes` packaging → vue.contributes.json. The injections load into the same
+  // host set the official extension uses (the SFC itself + the languages a Vue template can be
+  // embedded in: HTML fragment / markdown / pug), so dropping these files into a Vue extension
+  // wires up exactly as Volar's do. The embeddedLanguages map tells the editor each block's
+  // language (template → html, <script> → js/ts/…, <style> → css/…) — Monogram embeds its OWN
+  // source.ts, so source.ts → typescript here.
+  manifest: {
+    extensions: ['.vue'],
+    injectTo: ['text.html.vue', 'text.html.markdown', 'text.html.derivative', 'text.pug'],
+    embeddedLanguages: {
+      'text.html.derivative': 'html',
+      'source.js': 'javascript', 'source.ts': 'typescript', 'source.tsx': 'typescriptreact', 'source.js.jsx': 'javascriptreact',
+      'source.css': 'css', 'source.css.scss': 'scss', 'source.css.less': 'less', 'source.stylus': 'stylus', 'source.postcss': 'postcss',
+      'source.ts.embedded.html.vue': 'typescript',
+    },
+  },
   markup: {
     ...htmlMarkup,
     rawText: {
       tags: ['template', 'script', 'style'],
       token: 'RawText',
       embed: {
-        template: 'text.html.basic',   // Monogram's own HTML grammar
+        // <template> embeds text.html.derivative — the embedded-HTML-FRAGMENT scope (HTML's
+        // rules, no document prologue), which is exactly what the interpolation injection
+        // targets. html.ts emits it (aliasScopes) as a thin re-export of text.html.basic, and
+        // VS Code ships the same scope — so this ONE Vue grammar runs on Monogram's OR VS Code's
+        // HTML interchangeably. (Was text.html.basic; the retarget is REQUIRED, not cosmetic:
+        // the interpolation injection now fires on text.html.derivative, not basic.)
+        template: 'text.html.derivative',
         // <script lang="ts"> embeds Monogram's OWN proven TS grammar (more correct than VS Code's).
         script: { default: 'source.js', lang: { ts: 'source.ts', tsx: 'source.tsx', jsx: 'source.js.jsx' } },
         style: { default: 'source.css', lang: { scss: 'source.css.scss', less: 'source.css.less', stylus: 'source.stylus', postcss: 'source.postcss' } },
       },
     },
-    // Directives + {{ }} interpolation, INJECTED onto the embedded HTML's scopes (Vue
-    // syntax can't be baked into the reused HTML grammar — it injects on top). Values and
-    // interpolation embed Monogram's OWN TS grammar (source.ts). Scopes match the official.
+    // Directives + {{ }} interpolation, INJECTED onto the embedded HTML's scopes (Vue syntax
+    // can't be baked into the reused HTML grammar — it injects on top). Emitted as TWO thin-stub
+    // files (vue-directives.json / vue-interpolations.json) whose rules live in this grammar's
+    // repository — the exact official topology, so they're byte-diffable against Volar's. The
+    // selectors are the official ones (directives on the tag scope, interpolation on the
+    // embedded-HTML/markdown/pug scopes); the generator appends `-source.ts.embedded.html.vue`
+    // to each (the #5722 re-fire guard). Values + interpolation embed Monogram's OWN TS.
     inject: {
-      into: ['text.html.basic'],
       exprEmbed: 'source.ts.embedded.html.vue',
       // `{{ }}` and directive values are EXPRESSIONS, not programs — embed the derived
       // expression-only sub-grammar so `{{ const x }}`/`{{ for(…) }}` don't mis-highlight
       // statement keywords (a nested block still re-enters the full grammar via $self).
       exprInclude: 'source.ts#expression',
       interpolation: {
+        scopeName: 'vue.interpolations',
+        repoKey: 'vue-interpolations',
+        // Interpolation lives in TEXT content → inject onto the embedded-HTML-fragment scope
+        // (+ markdown / pug hosts, like the official, so `{{ }}` lights in Vue-in-md/pug too).
+        selector: [
+          { scope: 'text.html.derivative', excludes: ['comment.block'] },
+          { scope: 'text.html.markdown', excludes: ['comment.block'] },
+          { scope: 'text.pug', excludes: ['comment', 'string.comment'] },
+        ],
         open: '{{', close: '}}',
         beginScope: 'punctuation.definition.interpolation.begin.html.vue',
         endScope: 'punctuation.definition.interpolation.end.html.vue',
       },
       directives: {
+        scopeName: 'vue.directives',
+        repoKey: 'vue-directives',
+        // Directives live in TAG-ATTRIBUTE position → inject onto the tag scope. The official's
+        // per-clause excludes keep them from re-firing inside an attribute value / JSX / pug name.
+        selector: [
+          { scope: 'meta.tag', excludes: ['meta.attribute', 'meta.ng-binding', 'entity.name.tag.pug', 'attribute_value', 'source.tsx', 'source.js.jsx'] },
+          { scope: 'meta.element', excludes: ['meta.attribute'] },
+        ],
         control: [
           { match: 'v-for', scope: 'keyword.control.loop.vue' },
           { match: 'v-if|v-else-if|v-else', scope: 'keyword.control.conditional.vue' },

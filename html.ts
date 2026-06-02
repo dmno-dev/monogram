@@ -118,4 +118,8 @@ export default defineGrammar({
   entry: Document,
   scopes,
   markup,
+  // text.html.derivative — the embedded-HTML-fragment scope. Same rules as text.html.basic,
+  // re-exposed under the scopeName that Vue/markdown/pug injections target (Vue's <template>
+  // embeds this, not basic). Mirrors VS Code's separate html-derivative grammar.
+  aliasScopes: [{ scope: 'text.html.derivative', file: 'html-derivative' }],
 });
