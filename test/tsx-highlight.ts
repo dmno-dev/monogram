@@ -66,7 +66,10 @@ const mono = (await load('source.tsx', MONO_PATH))!;
 // ── 1. Curated checks: (snippet, substring, expected-scope-substring) ──
 // The expected scope is matched modulo the language suffix and as a path prefix,
 // so `entity.name.tag` accepts `entity.name.tag.tsx`.
-const checks: { label: string; code: string; want: { text: string; scope: string }[] }[] = [
+// `knownGap`: a FALSIFYING test for a documented gap — Monogram currently mis-highlights it
+// (verified vs tsc), so it's asserted to FAIL today and excluded from the pass FLOOR. If it
+// starts passing (the gap got fixed), the gate fails to remind you to drop the flag.
+const checks: { label: string; code: string; want: { text: string; scope: string }[]; knownGap?: boolean }[] = [
   {
     label: 'element tag + close',
     code: `const a = <div></div>;`,
@@ -172,6 +175,20 @@ const checks: { label: string; code: string; want: { text: string; scope: string
       { text: '=>', scope: 'storage.type.function.arrow' },
     ],
   },
+  {
+    // FALSIFYING TEST for a known gap (no-comma generic arrow disambiguated by `extends`,
+    // not a trailing comma). tsc (ScriptKind.TSX) parses `<T extends X>() => 1` as a generic
+    // ArrowFunction (0 parse errors); the official .tsx grammar gets it right too. Monogram's
+    // type-param guard requires a TOP-LEVEL COMMA, which this has none of, so it currently
+    // mis-scopes the `<…>` as a JSX tag. This check pins the desired behaviour.
+    label: '<T extends X>() generic arrow (no comma, extends-disambiguated) is type-params not JSX',
+    code: `const f = <T extends X>() => 1;`,
+    knownGap: true,
+    want: [
+      { text: '<', scope: 'punctuation.definition.typeparameters.begin' },
+      { text: '=>', scope: 'storage.type.function.arrow' },
+    ],
+  },
   // ── Bracket-DEFAULT generic arrows (tuple `[…]` / paren `(…)` default + trailing
   // comma) — the comma-skip must keep `[]`/`()` TRANSPARENT, not opaque. tsc parses
   // all of these as generic arrows; Monogram agrees (the official .tsx grammar gets
@@ -258,20 +275,29 @@ const scopeAt = (toks: Tok[], text: string): string | null => {
 };
 let pass = 0, total = 0;
 const fails: string[] = [];
-for (const { label, code, want } of checks) {
+const wOk = (toks: Tok[], w: { text: string; scope: string }) => { const got = scopeAt(toks, w.text); return !!got && got.startsWith(w.scope); };
+const gaps: string[] = [];        // documented gaps, asserted to still fail
+const regressedGaps: string[] = []; // a known gap that now PASSES → drop its flag
+for (const { label, code, want, knownGap } of checks) {
   const toks = tokenize(mono, code);
+  if (knownGap) {
+    (want.every((w) => wOk(toks, w)) ? regressedGaps : gaps).push(`  ${label}`);
+    continue;
+  }
   for (const w of want) {
     total++;
     const got = scopeAt(toks, w.text);
     // prefix match (modulo suffix): want `entity.name.tag` accepts `entity.name.tag.begin`? no —
     // we want the LEAF to START WITH the expected path, so `entity.name.tag` ⊆ `entity.name.tag`.
-    if (got && (got === w.want || got.startsWith(w.scope))) pass++;
+    if (got && got.startsWith(w.scope)) pass++;
     else fails.push(`  [${label}] «${w.text}» want ⊇ ${w.scope}  got ${got ?? '(none)'}`);
   }
 }
 console.log('── JSX highlighter — curated scope checks ──');
 console.log(`  ${pass}/${total} checks pass`);
 if (fails.length) { console.log('  FAILURES:'); for (const f of fails) console.log(f); }
+if (gaps.length) { console.log(`  known gaps (mis-highlighted today, vs tsc — tracked for a fix):`); for (const g of gaps) console.log(g); }
+if (regressedGaps.length) { console.log('\n✗ a knownGap check now PASSES — the gap is fixed, drop its `knownGap: true`:'); for (const g of regressedGaps) console.log(g); process.exit(1); }
 
 // ── 2. Drop-in agreement vs the official TypeScriptReact grammar (opt-in) ──
 const OFF = process.env.MONOGRAM_OFFICIAL_TSX
@@ -299,6 +325,6 @@ if (existsSync(OFF)) {
   console.log('\n  (set MONOGRAM_OFFICIAL_TSX to also measure JSX drop-in agreement vs official)');
 }
 
-const FLOOR = checks.reduce((n, c) => n + c.want.length, 0);
+const FLOOR = checks.filter((c) => !c.knownGap).reduce((n, c) => n + c.want.length, 0);
 if (pass < FLOOR) { console.log(`\n✗ JSX highlighter curated checks ${pass}/${FLOOR}`); process.exit(1); }
 console.log(`\n✓ JSX highlighter: ${pass}/${total} curated scope checks pass`);
