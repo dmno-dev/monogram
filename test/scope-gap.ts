@@ -153,5 +153,11 @@ export async function run(adapter: ScopeGapAdapter): Promise<void> {
     console.log(`\n  only-official-correct tokens (Monogram wrong) — ${onlyOff.length} shown:`);
     for (const x of onlyOff.slice(0, 12)) console.log(`    «${x.text.slice(0, 18)}» ${x.role}: official «${x.o}» → monogram «${x.m}»`);
   }
+  // Machine-readable summary for the README coverage-table generator (test/coverage-table.ts).
+  console.log('##SCOPEGAP## ' + JSON.stringify({
+    name: adapter.name, official: adapter.officialPath.replace(/^.*\//, ''), tokens: tally.total,
+    officialPct: tally.total ? (100 * tally.oCorrect) / tally.total : null,
+    monogramPct: tally.total ? (100 * tally.mCorrect) / tally.total : null,
+  }));
   console.log('\nDone.');
 }

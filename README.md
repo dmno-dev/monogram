@@ -11,6 +11,19 @@ Write a language's grammar **once**, as an executable definition. Monogram runs 
 - **HTML** ([`html.ts`](html.ts)) — the engine reaching *past token streams into markup*; ~95 lines, validated against [`parse5`](https://github.com/inikulin/parse5).
 - **Vue** ([`vue.ts`](vue.ts)) — a dialect of `html.ts`: SFC blocks that embed Monogram's own TS/JS/CSS, plus directives and `{{ }}` interpolation.
 
+<!-- coverage:start -->
+Per-grammar alignment vs the **official parser** as the neutral oracle (`node test/coverage-table.ts --write`). *Parser* = Monogram's parser vs the official parser: `branch` = source-coverage-anchored branch alignment, `agree` = bidirectional accept/reject (tree-equality for structural oracles) — `test/src-coverage.ts`. *Highlighter* = Monogram's derived TextMate grammar vs the official one, both graded against the parser's token roles — `test/scope-gap.ts`, the [vscode#203212](https://github.com/microsoft/vscode/issues/203212) comparison.
+
+| Grammar | Parser (branch · agree) | Highlighter — Monogram vs official |
+|---|---|---|
+| TypeScript | 97.7% · 97.1% | 99.3% vs 99.0% |
+| JavaScript | 97.3% · 92.2% | — |
+| JSX | 100.0% · 97.1% | — |
+| TSX | 99.4% · 96.7% | — |
+| HTML | 84.3% · 77.9% | 100.0% vs 97.6% |
+| YAML | 83.0% · 63.1% | 46.5% vs 89.7% |
+<!-- coverage:end -->
+
 ## Quick start
 
 Requires Node 24+ (runs `.ts` directly — no build step, no `tsx`).
@@ -174,6 +187,7 @@ _Each hand-written **official** grammar vs Monogram's **derived** one, on the bu
 <!-- issues:end -->
 
 <sub>A sampled ledger of real tracker issues, not an exhaustive audit. Run `npm run bench:issues` to regenerate (needs the official grammars: VS Code's installed TS/JS/HTML, and the Vue fixtures — see [`test/vue-bench.ts`](test/vue-bench.ts)). Sources: [`test/issue-cases.ts`](test/issue-cases.ts), [`test/html-issue-cases.ts`](test/html-issue-cases.ts), [`test/vue-issue-cases.ts`](test/vue-issue-cases.ts).</sub>
+
 
 ### The ceiling — and the bar for claiming it
 

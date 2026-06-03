@@ -157,6 +157,7 @@ export async function run(adapter: Adapter): Promise<void> {
   adapter.renderHeader?.(results, corpus);
 
   const ledgerTop = adapter.ledgerTop ?? 15;
+  const denomSummary: { label: string; alignment: number; completeness: number }[] = [];
   for (const den of adapter.denominators) {
     let totalSeen = 0, reachable = 0, agreed = 0, disagreed = 0;
     const dis: BranchState[] = [];
@@ -171,6 +172,7 @@ export async function run(adapter: Adapter): Promise<void> {
     const uncovered = totalSeen - reachable;
     const alignment = reachable ? (agreed / reachable) * 100 : 0;
     const completeness = totalSeen ? (reachable / totalSeen) * 100 : 0;
+    denomSummary.push({ label: den.label, alignment, completeness });
     console.log(`\n────── denominator: ${den.label} ──────`);
     console.log(`  total branches seen (reachable+uncovered) : ${totalSeen}`);
     console.log(`  reachable (hit >=1 file)                  : ${reachable}`);
@@ -194,5 +196,11 @@ export async function run(adapter: Adapter): Promise<void> {
   }
 
   adapter.renderFooter?.(results, corpus);
+  // Machine-readable summary line for the README coverage-table generator (test/coverage-table.ts).
+  console.log('##COV## ' + JSON.stringify({
+    name: adapter.name, oracle: adapter.oracle, files: results.length,
+    agreePct: results.length ? (100 * agreeCount) / results.length : null,
+    denoms: denomSummary,
+  }));
   console.log('\nDone.');
 }
