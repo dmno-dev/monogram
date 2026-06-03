@@ -1033,6 +1033,20 @@ function generateJsxPatterns(langName: string, identRegex: string, jsx: JsxInfo,
     ? '(?:\\s*<(?<TA>[^<>]*(?:<\\g<TA>>[^<>]*)*)>)?'
     : '';
 
+  // An open tag is terminated by EITHER a plain `>` (children follow) or the
+  // self-close `/>`. Both share their last character — the self-close token (`/>`)
+  // is the open terminator (`>`) prefixed by a `/`. Derive both from the grammar's
+  // own self-close token rather than hardcoding `>`/`/`: the terminator char is its
+  // last char, the self-close prefix is everything before it. `tagEndAhead` is the
+  // zero-width "open tag ends here" lookahead `(?=/?>)` (prefix optional → matches a
+  // bare `>` or the full `/>`); a grammar whose self-close were spelled differently
+  // (e.g. a hypothetical `|>`) would yield that spelling. This lets the open-tag body
+  // stop just before the terminator, so the element's `end` can claim a self-close
+  // `/>` (no children) while a bare `>` opens the children region instead.
+  const tagEndChar = jsx.selfCloseTok.slice(-1);
+  const selfClosePrefix = jsx.selfCloseTok.slice(0, -1);
+  const tagEndAhead = `(?=${escapeRegex(selfClosePrefix)}?${escapeRegex(tagEndChar)})`;
+
   // A JSX tag name: optional `ns:` prefix, then a dotted member-expression OR a
   // lowercase-intrinsic OR a (non-dotted) component. Captures, in order:
   //   1 namespace, 2 `:`, 3 dotted-member, 4 intrinsic-name, 5 component-name.
@@ -1237,35 +1251,49 @@ function generateJsxPatterns(langName: string, identRegex: string, jsx: JsxInfo,
     patterns: [...tagTypeArgsInclude, { include: '#jsx-attributes' }],
   };
 
-  // ── jsx-element: `<Tag …> children </Tag>` ──
-  // Two-phase: an inner open-tag begin/end scopes the attributes up to `>`, then
-  // a children begin/end (contentName meta.jsx.children) runs to the `</…>`.
+  // ── jsx-element: `<Tag …/>` (self-closing) OR `<Tag …> children </Tag>` ──
+  // ONE region covers BOTH shapes (like the official `jsx-tag`), so the self-close-vs-
+  // open decision is NOT made by a brittle lookahead at the trigger (which can't see
+  // a `>` buried in an attribute value — e.g. the `>` of an arrow `{x => …}` or a
+  // string `attr=">"` — and would mis-route such a self-closing tag to the open form,
+  // leaving `meta.jsx.children` running to EOF). Instead:
+  //   • the open-tag BODY ends at the zero-width `(?=/?>)` lookahead — it stops just
+  //     before the terminator without consuming it, so the terminator is decided here;
+  //   • the element's `end` matches the self-close `/>` FIRST (closing the whole element,
+  //     no children) and the `</…>` close second;
+  //   • the children region's begin is the literal `>` (consumed, scoped tag-end). A
+  //     self-close's `/>` is claimed by the element `end` before this can fire, so a
+  //     self-closing tag never opens a children region.
   result['jsx-element'] = {
     name: `meta.tag.${langName}`,
     begin: `(?=(<)\\s*${nameRe}(?:\\s|/?>|<))`,
-    // The closing tag's name is optional (our model doesn't enforce name-match,
-    // matching TS treating a mismatch as a semantic — not parse — error). Wrap
-    // the whole name in `(?:…)?` so the optional `?` attaches to the group, not
-    // to `nameRe`'s trailing `(?<!\.|-)` lookbehind (a quantified zero-width
-    // assertion is an invalid Oniguruma regex).
-    end: `(${escapeRegex(jsx.closeTok)})\\s*(?:${nameRe})?\\s*(>)`,
+    // End on EITHER the self-close `/>` (capture 1) OR the `</name>` close (`</` is
+    // capture 2, the name sub-captures 3..7, the `>` capture 8). The closing tag's
+    // name is optional (our model doesn't enforce name-match, matching TS treating a
+    // mismatch as a semantic — not parse — error). Wrap the whole name in `(?:…)?` so
+    // the optional `?` attaches to the group, not to `nameRe`'s trailing `(?<!\.|-)`
+    // lookbehind (a quantified zero-width assertion is an invalid Oniguruma regex).
+    end: `(${escapeRegex(jsx.selfCloseTok)})|(${escapeRegex(jsx.closeTok)})\\s*(?:${nameRe})?\\s*(>)`,
     endCaptures: {
-      '1': { name: tagBegin },
-      ...nameCaptures(2),   // name sub-captures 2..6 (ns, sep, member, intrinsic, component)
-      '7': { name: tagEnd },
+      '1': { name: tagEnd },   // self-close `/>`
+      '2': { name: tagBegin }, // close-tag `</`
+      ...nameCaptures(3),      // name sub-captures 3..7 (ns, sep, member, intrinsic, component)
+      '8': { name: tagEnd },   // close-tag `>`
     },
     patterns: [
-      // open tag: `<Tag …>` — type-args (if any) then attributes, ends at `>`.
+      // open tag: `<Tag …>` — type-args (if any) then attributes, ends (zero-width)
+      // just before the terminator so the element `end` decides `/>` vs `>`.
       {
         begin: `(<)\\s*${nameRe}`,
         beginCaptures: { '1': { name: tagBegin }, ...nameCaptures(2) },
-        end: '(>)',
-        endCaptures: { '1': { name: tagEnd } },
+        end: tagEndAhead,
         patterns: [...tagTypeArgsInclude, { include: '#jsx-attributes' }],
       },
-      // children region.
+      // children region — opens on the bare `>` terminator (a self-close `/>` is
+      // taken by the element `end` first), runs to the `</…>` close.
       {
-        begin: '(?<=>)',
+        begin: `(${escapeRegex(tagEndChar)})`,
+        beginCaptures: { '1': { name: tagEnd } },
         end: `(?=${escapeRegex(jsx.closeTok)})`,
         contentName: `meta.jsx.children.${langName}`,
         patterns: [{ include: '#jsx-children' }],
