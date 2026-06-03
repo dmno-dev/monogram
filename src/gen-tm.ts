@@ -3201,7 +3201,12 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
     //     `</script>` regardless of embedded-language context. The embed stays ONE continuous
     //     region across lines (the `while` only TESTS, never re-anchors), so a multi-line template
     //     literal / block comment in the body is unbroken; only a line that actually contains the
-    //     close tag drops. Also fixes the trailing-type bug. The close tag is matched by host #tag.
+    //     close tag drops. CRUCIALLY the line-start drop FORCE-UNWINDS a still-open embedded region
+    //     (e.g. a trailing unterminated `type T =` whose body would otherwise read `</script>` as
+    //     `< script >` type-args) — an `end:(?=</tag)` lookahead can NOT do this (the innermost open
+    //     embed region's patterns are evaluated before any outer `end`), so the `while` is load-
+    //     bearing here (#5538/#2060, #65/#74). The dropped close LINE's pre-close content is then
+    //     re-embedded by the sibling `#<key>-close` rule below. The close tag is matched by host #tag.
     repository[key] = {
       name: `meta.${tag}.${L}`,
       begin: `(${o})(${tag})\\b${attrs}(${c})`,
@@ -3210,8 +3215,28 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
       contentName: embed,
       patterns: [{ include: embed }],
     };
+    // (3) CLOSE LINE with leading content — `BODY</tag>` where BODY shares the close's line (the
+    //     open tag was on an earlier line, so this is NOT the `-inline` single-line shape; and the
+    //     `begin/while` above DROPS this line because it contains the close). Without this, that
+    //     pre-close BODY falls to plain host text (the #2060 / #5538 same-line-close gap). Here it is
+    //     re-tokenized as a BOUNDED capture-embed: BODY is captured up to the close and run through
+    //     the embed in ISOLATION, so the embed's own greedy line-comment / regex / unterminated
+    //     construct physically cannot reach across the close — the close stays clean tag punctuation
+    //     AND its preceding code is highlighted. The BODY needs ≥1 char before the close, so a BARE
+    //     close line (just `</tag>`) does NOT match here — it stays on the `begin/while` force-unwind
+    //     path (preserving #5538's open-type unwind). The BODY is a tempered-greedy run
+    //     `(?:(?!<tag\b).)+?` — any char that does NOT begin a `<tag` OPEN, so the rule cannot fire on
+    //     a single-line `<tag>…</tag>` (that whole line is the `-inline` shape, claimed earlier) nor
+    //     swallow a following block's open tag, yet a bare `<` in the body (`a < b`) is fine. Agnostic:
+    //     keys only on the tag + `<`/`/`/`>` delimiters (DATA), never on the embed's syntax.
+    repository[`${key}-close`] = {
+      name: `meta.${tag}.${L}`,
+      match: `^(\\s*)((?:(?!${o}${tag}\\b).)+?)(${o}${slash})(${tag})\\s*(${c})`,
+      captures: { '2': bodyCap, '3': { name: sOpen }, '4': { name: sName }, '5': { name: sClose } },
+    };
     top.push({ include: `#${key}-inline` });   // single-line first, then multi-line
     top.push({ include: `#${key}` });
+    top.push({ include: `#${key}-close` });    // orphan close line (BODY</tag>) — after the open-tag rules
   };
   // Multi-line START TAG variant — `<script\n  lang="ts"\n>` (force-expand-multiline
   // formatting; vuejs/language-tools#3999). A TextMate `begin` is single-line, so the entries

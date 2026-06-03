@@ -9,6 +9,9 @@ export const familyOf = (s: string): string =>
     : s.includes('source.css') ? 'css' : s.includes('text.html') ? 'html' : 'other';
 export const embedded = (s: string) => s.includes('source.ts') || s.includes('source.js');
 export const htmlText = (s: string) => familyOf(s) === 'html';   // recovered to HTML (didn't leak into the embed)
+// A close-tag NAME that stayed clean tag punctuation — `entity.name.tag` present and the embedded
+// code scopes (regexp/string/type from a leaked source.*) absent. Used by the same-line-close cases.
+export const isCloseTag = (s: string) => s.includes('entity.name.tag') && !s.includes('string.regexp') && !s.includes('meta.type');
 export const DONE = '\n  <b>DONE</b>\n</template>';              // downstream marker — must recover to HTML
 
 export interface Check { at: string; nth?: number; want: (s: string) => boolean; desc: string }
@@ -36,8 +39,22 @@ export const cases: Case[] = [
   { id: '#6007/#2096/#520', title: '`as` type assertion in directive value', src: `<template>\n  <Foo :schema="x as JSONSchema" />${DONE}`,
     checks: [{ at: 'as', want: embedded, desc: '`as` embeds as TS' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers (begin/while bounds it)' }] },
   // ── script / boundary family ──
-  { id: '#5538/#2060', title: 'trailing `export type` before `</script>`', src: `<script lang="ts">\nexport type T = number\n</script>\n<template>\n  <p>hi</p>${DONE}`,
+  { id: '#5538/#2060', title: 'trailing `export type` before `` </script> ``', src: `<script lang="ts">\nexport type T = number\n</script>\n<template>\n  <p>hi</p>${DONE}`,
     checks: [{ at: 'hi', want: htmlText, desc: '</script> ends the embed — template is HTML' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
+  // SAME-LINE close (the #2060 minimal repro): content + `` </script> `` share a line. The embed must
+  // still highlight the content AS code AND keep the close clean tag punctuation — Monogram bounds the
+  // pre-close content with a capture-embed so neither is lost. The official gets the content but LEAKS
+  // the close (`/script>` mis-read as a `string.regexp`), the reported #2060 bug → off:false.
+  { id: '#2060-inline', title: '`` const a = 1;</script> `` (content on the close line) embeds + clean close', src: `<script setup lang="ts">\nconst a = 1;</script>`,
+    checks: [{ at: 'const', want: embedded, desc: 'the const on the close line still embeds as TS (the embed is not dropped for that line)' },
+      { at: '/script', want: isCloseTag, desc: 'the </script> is clean tag punctuation, NOT swallowed into source.ts (the official leaks it as string.regexp.ts)' }] },
+  // SAME-LINE close after an UNTERMINATED union, then an adjacent block. Monogram: 1st block\'s tail
+  // embeds, the close is clean, the 2nd block recovers as code. The official leaks the close AND the
+  // entire 2nd block into the 1st block\'s type context → off:false.
+  { id: '#2060-inline-adjacent', title: "an unterminated union before a same-line `` </script> ``, then a second `<script setup>` block", src: `<script lang="ts">\nexport type ButtonType = 'a' | 'b'</script>\n<script setup lang="ts">\ndefineProps<{ type: ButtonType }>()\n</script>`,
+    checks: [{ at: `| 'b'`, want: embedded, desc: 'the union tail before the same-line </script> still embeds as TS' },
+      { at: '/script', want: isCloseTag, desc: 'the first </script> is clean tag punctuation, not leaked into source.ts' },
+      { at: 'defineProps', want: embedded, desc: 'the second block recovers and embeds as TS (the official swallows it into the first block)' }] },
   { id: '#3999', title: 'multi-line `<script>` start tag doesn\'t break the code after it', src: `<script\n  lang="ts"\n>\nconst x = 1\n</script>`,
     checks: [{ at: 'const', want: embedded, desc: 'body still embeds as TS across the multi-line tag' }] },
   // ── tag / interpolation edge cases ──

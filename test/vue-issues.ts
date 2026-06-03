@@ -41,6 +41,7 @@ const expect: Record<string, { mono: boolean; off: boolean }> = {
   '#3400': { mono: true, off: true }, '#5370': { mono: true, off: true }, '#5118': { mono: true, off: true },
   '#1675': { mono: true, off: true }, '#6039/#4741': { mono: true, off: true }, '#5722': { mono: true, off: true },
   '#6007/#2096/#520': { mono: true, off: false }, '#5538/#2060': { mono: true, off: true },
+  '#2060-inline': { mono: true, off: false }, '#2060-inline-adjacent': { mono: true, off: false },
   '#3999': { mono: true, off: true }, '#4769': { mono: true, off: true }, '#5701': { mono: true, off: true },
   '#6070': { mono: true, off: true },
   // ── 2026-06 expansion: more reported bugs, honest mix (incl. only-official Monogram gaps) ──

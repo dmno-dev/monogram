@@ -16,6 +16,9 @@
       "include": "#raw-script"
     },
     {
+      "include": "#raw-script-close"
+    },
+    {
       "include": "#raw-script-ml"
     },
     {
@@ -23,6 +26,9 @@
     },
     {
       "include": "#raw-style"
+    },
+    {
+      "include": "#raw-style-close"
     },
     {
       "include": "#raw-style-ml"
@@ -34,6 +40,9 @@
       "include": "#raw-textarea"
     },
     {
+      "include": "#raw-textarea-close"
+    },
+    {
       "include": "#raw-textarea-ml"
     },
     {
@@ -41,6 +50,9 @@
     },
     {
       "include": "#raw-title"
+    },
+    {
+      "include": "#raw-title-close"
     },
     {
       "include": "#raw-title-ml"
@@ -159,6 +171,29 @@
           "include": "source.js"
         }
       ]
+    },
+    "raw-script-close": {
+      "name": "meta.script.html",
+      "match": "^(\\s*)((?:(?!<script\\b).)+?)(</)(script)\\s*(>)",
+      "captures": {
+        "2": {
+          "name": "source.js",
+          "patterns": [
+            {
+              "include": "source.js"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "4": {
+          "name": "entity.name.tag.html"
+        },
+        "5": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      }
     },
     "raw-script-ml": {
       "name": "meta.script.html",
@@ -289,6 +324,29 @@
         }
       ]
     },
+    "raw-style-close": {
+      "name": "meta.style.html",
+      "match": "^(\\s*)((?:(?!<style\\b).)+?)(</)(style)\\s*(>)",
+      "captures": {
+        "2": {
+          "name": "source.css",
+          "patterns": [
+            {
+              "include": "source.css"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "4": {
+          "name": "entity.name.tag.html"
+        },
+        "5": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      }
+    },
     "raw-style-ml": {
       "name": "meta.style.html",
       "begin": "(<)(style)\\b(?![^>]*>)",
@@ -418,6 +476,29 @@
         }
       ]
     },
+    "raw-textarea-close": {
+      "name": "meta.textarea.html",
+      "match": "^(\\s*)((?:(?!<textarea\\b).)+?)(</)(textarea)\\s*(>)",
+      "captures": {
+        "2": {
+          "name": "source.embedded",
+          "patterns": [
+            {
+              "include": "source.embedded"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "4": {
+          "name": "entity.name.tag.html"
+        },
+        "5": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      }
+    },
     "raw-textarea-ml": {
       "name": "meta.textarea.html",
       "begin": "(<)(textarea)\\b(?![^>]*>)",
@@ -546,6 +627,29 @@
           "include": "source.embedded"
         }
       ]
+    },
+    "raw-title-close": {
+      "name": "meta.title.html",
+      "match": "^(\\s*)((?:(?!<title\\b).)+?)(</)(title)\\s*(>)",
+      "captures": {
+        "2": {
+          "name": "source.embedded",
+          "patterns": [
+            {
+              "include": "source.embedded"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "4": {
+          "name": "entity.name.tag.html"
+        },
+        "5": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      }
     },
     "raw-title-ml": {
       "name": "meta.title.html",
