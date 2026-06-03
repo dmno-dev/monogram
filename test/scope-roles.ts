@@ -74,6 +74,9 @@ export const R = {
   importBinding: 'import.binding',
   // the ambiguity fork — graded (NOT lexical floor): < > / when used as operators
   opCompare: 'op.compare',
+  // markup (HTML/XML/…) — for the unified scope-gap harness across vscode#203212 languages
+  tagName: 'tag.name',
+  attrName: 'attr.name',
   // lexical floor
   op: 'op',
   punct: 'punct',
@@ -225,6 +228,10 @@ export const ROLE_SPEC: Record<RoleName, RoleSpec> = {
   // as a generic bracket (punctuation.definition.typeparameters) or a regex
   // (string.regexp) instead of an operator is exactly the #978/#853 class — WRONG.
   [R.opCompare]: { tier: 'strict', desc: '< > / used as a binary operator', exact: ['keyword.operator'], family: ['keyword'] },
+
+  // ── markup roles (HTML/XML) — entity names a highlighter must get right ───────
+  [R.tagName]: { tier: 'strict', desc: 'element tag name (<div>, </div>)', exact: ['entity.name.tag'], family: ['entity.name', 'meta.tag', 'support.class.component'] },
+  [R.attrName]: { tier: 'strict', desc: 'attribute name (class=, id=)', exact: ['entity.other.attribute-name'], family: ['entity.other'] },
 
   // ── lexical floor: reported, excluded from the headline ───────────────────────
   [R.op]: { tier: 'lexical', desc: 'operator punctuation (+ - * = => …)', exact: ['keyword.operator'], family: ['keyword', 'punctuation', 'storage', 'meta'] },
