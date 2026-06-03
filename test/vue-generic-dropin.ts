@@ -5,12 +5,13 @@
 //  (`source.ts#comment`, `source.ts#type`, `source.ts#punctuation-comma`) + the literal variance /
 //  `=` matches — exactly mirroring Volar's hand-written `vue-directives-generic-attr`. That only
 //  works if those official key NAMES resolve in whichever source.ts is loaded:
-//    • Monogram's source.ts — via typescript.ts's `repoAliases` (the drop-in API).
+//    • Monogram's source.ts — NATIVELY (typescript.ts's `canonicalRepoNames` 限制器 makes gen-tm emit
+//      `#comment`/`#type`/`#punctuation-comma` as the real key names — one key each, not an alias).
 //    • VS Code's source.ts  — natively (they're its own keys).
 //  This harness loads Monogram's vue grammar TWICE — once over each source.ts — and asserts the
 //  type parameter, the `extends` constraint keyword, the comma separator, and a `/* */` comment in
-//  the value all carry the right scope on BOTH. If they only worked on one host, the dual-key hack
-//  was load-bearing; passing on both proves the alias makes Monogram's source.ts a true drop-in.
+//  the value all carry the right scope on BOTH. If they only worked on one host, the embed was
+//  host-locked; passing on both proves the canonical names make Monogram's source.ts a true drop-in.
 //
 //  Skips (exit 0) if VS Code's official TS grammar isn't installed — dev-only, like vue-dropin.
 //  Run: node test/vue-generic-dropin.ts
@@ -104,4 +105,4 @@ for (const f of failures) console.log(f);
 if (failures.length) { console.log('\n✗ generic= does not tokenize identically on both hosts — the official keys do not resolve somewhere.'); process.exit(1); }
 console.log('  ✓ generic= uses ONLY official keys (source.ts#comment/#type/#punctuation-comma) +');
 console.log('    the literal variance/`=` matches, and lights up correctly on Monogram\'s source.ts');
-console.log('    (via repoAliases) AND VS Code\'s official source.ts — a true repository-level drop-in.');
+console.log('    (canonical native names) AND VS Code\'s official source.ts — a true repository-level drop-in.');

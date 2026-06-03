@@ -3337,9 +3337,9 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
   const injectParts = buildMarkupInjectParts(grammar, scopeName);
   if (injectParts) Object.assign(repository, injectParts.repo);
 
-  // Drop-in repository aliases (official key names → reuse internal keys). Additive; markup
-  // grammars may also expose them (none today), so the path is symmetric with the token-stream one.
-  applyRepoAliases(grammar, repository);
+  // Repository-key NAMING CONSTRAINT (官方命名「限制器」): same projection as the token-stream path —
+  // markup grammars may also declare canonical names (none today), so the path is symmetric.
+  applyCanonicalRepoNames(grammar, repository, top);
 
   return {
     $schema: 'https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json',
@@ -3618,19 +3618,83 @@ function deriveExpressionEntry(grammar: CstGrammar, orderedPatterns: { include: 
   repository['expression'] = { patterns: exprPatterns };
 }
 
-// Repository-API ALIASES (drop-in): the grammar may declare `repoAliases` mapping an OFFICIAL
-// grammar's repository KEY NAME → a pattern list that reuses THIS grammar's own internal keys, so
-// the official name (`source.ts#type`, `#comment`, `#punctuation-comma`, …) resolves in Monogram
-// too and external `#include`s don't no-op. Additive: an entry whose key already exists is SKIPPED
-// (a real matching key like `expression` is never clobbered), and existing entries / tokenization
-// are untouched. The key NAMES are language DATA in the grammar definition — gen-tm only copies the
-// patterns through, so the engine stays language-agnostic (a grammar without `repoAliases` is
-// unaffected; the agnostic-test grammars declare none, so no TS names leak into the engine).
-function applyRepoAliases(grammar: CstGrammar, repository: Record<string, TmPattern>): void {
-  if (!grammar.repoAliases) return;
-  for (const [key, patterns] of Object.entries(grammar.repoAliases)) {
-    if (key in repository) continue;   // never override an existing (already-matching) key
-    repository[key] = { patterns: patterns.map(p => ({ ...p })) };
+// Rewrite every `#oldKey` repository reference (in `include`, at any depth: nested `patterns`
+// and `captures`/`beginCaptures`/`endCaptures`, since a capture IS a rule) to `#newKey`, per a
+// rename map. `$self` and any non-`#` include (cross-grammar `source.x#key`) are left untouched.
+// Pure string substitution on the reference NAME — no `match`/`begin`/`name` is read or changed.
+function rewriteRepoRefs(node: unknown, rename: Map<string, string>): void {
+  if (Array.isArray(node)) { for (const n of node) rewriteRepoRefs(n, rename); return; }
+  if (!node || typeof node !== 'object') return;
+  const obj = node as Record<string, unknown>;
+  if (typeof obj.include === 'string' && obj.include.startsWith('#')) {
+    const to = rename.get(obj.include.slice(1));
+    if (to !== undefined) obj.include = `#${to}`;
+  }
+  for (const k of ['patterns', 'captures', 'beginCaptures', 'endCaptures'] as const) {
+    const v = obj[k];
+    if (v && typeof v === 'object') {
+      if (Array.isArray(v)) rewriteRepoRefs(v, rename);
+      else for (const cap of Object.values(v as Record<string, unknown>)) rewriteRepoRefs(cap, rename);
+    }
+  }
+}
+
+// The repository-key NAMING CONSTRAINT ("限制器"): the grammar may declare `canonicalRepoNames`,
+// a DATA map { OFFICIAL repo KEY NAME → the structural key(s) gen-tm derived for the SAME construct }.
+// For Monogram's source.ts to be a repository-level DROP-IN, the official NAMES that external grammars
+// `#include` (`source.ts#type`, `#qstring-double`, `#comment`, …) must be the names Monogram NATIVELY
+// emits. After the repository is built under structural names, this projects each structural identity
+// through the constraint so the canonical official name is produced DIRECTLY:
+//   • STRING value → 1:1 construct: RENAME the structural key to the official name and REWRITE every
+//     `#…` reference to it (in the repository AND the top-level patterns). The structural name is gone
+//     — there is ONE key, natively named (NOT a structural key + an additive alias).
+//   • ARRAY value → a UNION the official grammar itself expresses as a `{patterns:[…]}` wrapper
+//     (e.g. `#comment`, `#return-type`); Monogram derives the members as separate keys, so no single
+//     rename carries the name. SYNTHESISE the wrapper `{patterns:[{include:#member}…]}` under the
+//     official name. Members keep their structural names (referenced elsewhere) but are resolved
+//     through the 1:1 renames first, so a renamed member is included by its FINAL name.
+// An official name that already names a real Monogram key (e.g. `namespace-declaration`, `expression`)
+// is LEFT ALONE — never clobbered. Purely a NAMING projection (no pattern bytes change), so emitted
+// tokenization is byte-identical. The NAMES are language DATA in the grammar definition; gen-tm only
+// looks them up + substitutes, so the engine stays language-agnostic (a grammar declaring none is
+// unaffected — the agnostic-test grammars declare none, so no TS names leak into the engine).
+function applyCanonicalRepoNames(
+  grammar: CstGrammar,
+  repository: Record<string, TmPattern>,
+  topPatterns: { include: string }[],
+): void {
+  const map = grammar.canonicalRepoNames;
+  if (!map) return;
+
+  // Pass 1 — collect the 1:1 renames (string values) into oldStructural → officialName, skipping any
+  // whose source is missing or whose TARGET name already names a real key (don't clobber it).
+  const rename = new Map<string, string>();
+  for (const [official, source] of Object.entries(map)) {
+    if (typeof source !== 'string') continue;
+    if (!(source in repository)) continue;           // structural key not derived for this language
+    if (official !== source && official in repository) continue;  // target name already taken — leave alone
+    rename.set(source, official);
+  }
+
+  // Apply the renames: move each repository entry to its official key, then rewrite EVERY reference
+  // (repository entries + top-level patterns) from the old structural name to the official one.
+  for (const [from, to] of rename) {
+    if (from === to) continue;
+    repository[to] = repository[from];
+    delete repository[from];
+  }
+  for (const entry of Object.values(repository)) rewriteRepoRefs(entry, rename);
+  rewriteRepoRefs(topPatterns, rename);
+
+  // Pass 2 — synthesise the UNION wrapper keys (array values). Members are resolved through the
+  // renames from pass 1 (a member that was itself renamed is included by its final official name).
+  for (const [official, source] of Object.entries(map)) {
+    if (!Array.isArray(source)) continue;
+    if (official in repository) continue;            // already a real key — never clobber
+    const patterns = source
+      .filter(m => repository[rename.get(m) ?? m])   // keep only members that exist post-rename
+      .map(m => ({ include: `#${rename.get(m) ?? m}` }));
+    if (patterns.length) repository[official] = { patterns };
   }
 }
 
@@ -5792,9 +5856,11 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
   // tokenization is unchanged — `#expression` is inert unless something includes it.
   if (grammar.expressionRule) deriveExpressionEntry(grammar, orderedPatterns, repository);
 
-  // Drop-in repository aliases (official key names → reuse internal keys). Additive; runs last
-  // so `#expression` (a real key) is in place before an alias might reference it.
-  applyRepoAliases(grammar, repository);
+  // Repository-key NAMING CONSTRAINT (官方命名「限制器」): rename Monogram's structural keys to the
+  // official names a drop-in must expose, and rewrite all references — in the repository AND the
+  // top-level patterns. Runs last so `#expression` (a real key) is already in place; it never
+  // clobbers a key that already matches by name. Pure rename → tokenization unchanged.
+  applyCanonicalRepoNames(grammar, repository, orderedPatterns);
 
   return {
     $schema: 'https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json',

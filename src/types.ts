@@ -186,10 +186,9 @@ export interface MarkupInject {
   };
 }
 
-/** One pattern fragment in a `repoAliases` entry (see CstGrammar.repoAliases). Either a reuse
- *  `include` of an existing internal repository key (the preferred, additive form) or an inline
- *  `match` with a scope `name` (for the literal sub-patterns a hand-written grammar inlines —
- *  e.g. a variance keyword or `=` operator). A plain TextMate-rule subset; gen-tm passes it through
+/** A small TextMate-rule fragment a grammar may inline as DATA — either a reuse `include` of an
+ *  existing internal repository key, or an inline `match` with a scope `name` (e.g. an attribute
+ *  value sub-pattern; see `MarkupConfig.attributeEmbed.valuePatterns`). gen-tm passes it through
  *  verbatim, so it stays language-agnostic (the engine never inspects the strings). */
 export interface RepoAlias {
   include?: string;   // e.g. '#type-inner'  (reuse an existing internal key)
@@ -253,20 +252,31 @@ export interface CstGrammar {
   // text.html.derivative this way — the embedded-fragment scope Vue/markdown/pug inject onto;
   // VS Code ships it as a separate grammar for the same reason. gen-tm emits one file each.
   aliasScopes?: { scope: string; file: string }[];
-  // Repository-API ALIASES: official-grammar repository KEY NAMES → a pattern list that reuses
-  // THIS grammar's own internal structural key(s). For Monogram's source.ts to be a true
-  // repository-level DROP-IN for VS Code's official TS grammar, the official key NAMES that
-  // external grammars `#include` (`source.ts#type`, `source.ts#comment`, `source.ts#punctuation-comma`,
-  // …) must also RESOLVE in Monogram's grammar — an unresolved `#include` silently no-ops. gen-tm
-  // emits each entry as an ADDITIVE `repository[officialKey] = { patterns: <these> }`, REUSING
-  // Monogram's existing rules (e.g. `type` → `[{include:'#type-inner'}]`) rather than renaming
-  // internal keys — so Monogram's own references / tokenization are undisturbed; the official key
-  // is just a second NAME for the same patterns. An entry whose key already exists is skipped (a
-  // real key like `expression` already matches by name and is never clobbered). The KEY NAMES are
-  // language-specific DATA and live in the grammar definition (typescript.ts), NEVER in gen-tm —
-  // which keeps the engine language-agnostic. Each pattern is a plain TextMate fragment: an
-  // `{ include: '#internal-key' }` (the preferred reuse form) or an inline `{ name, match }`.
-  repoAliases?: Record<string, RepoAlias[]>;
+  // Repository-key NAMING CONSTRAINT ("限制器"): a DATA map { OFFICIAL key name → the structural
+  // key(s) gen-tm derived for the SAME construct }. For Monogram's source.ts to be a repository-level
+  // DROP-IN, the key NAMES external grammars `#include` (`source.ts#type`, `#qstring-double`,
+  // `#comment`, …) must be the names Monogram NATIVELY emits — not a structural name (`#type-inner`)
+  // plus an additive alias. This map CONSTRAINS gen-tm's key emission: after the repository is built
+  // with structural names, gen-tm projects the structural identity through this constraint, producing
+  // the canonical official name DIRECTLY (the structural name ceases to exist — it is RENAMED, not
+  // aliased) and rewriting every `#…` reference to that key consistently, so the repository holds ONE
+  // key, natively named. Two value forms encode the two construct↔key relationships gen-tm derives:
+  //   • a STRING (`'type': 'type-inner'`) → the official construct maps 1:1 to one structural key;
+  //     RENAME that key (and all references) to the official name. The old name is gone.
+  //   • an ARRAY (`'comment': ['jsdoc','linecomment',…]`) → the official key is a UNION the official
+  //     grammar itself expresses as a `{patterns:[…]}` wrapper; Monogram derives the members as
+  //     separate, independently-referenced keys, so no single rename can carry the official name.
+  //     gen-tm SYNTHESISES the wrapper key `{patterns:[{include:#member}…]}` under the official name,
+  //     each member resolved through any 1:1 rename above (so a renamed member is referenced by its
+  //     final name). The members keep their own structural names (they are used elsewhere too).
+  // It is purely a NAMING projection — no `match`/`begin`/`name`/scope changes — so the tokenization of
+  // every input is byte-for-byte identical (it is a rename, not a pattern edit). An official name that
+  // already exists as a real Monogram key (e.g. `namespace-declaration`, `expression`) is left ALONE
+  // (never clobbered). The NAMES are language-specific DATA and live in the grammar definition
+  // (typescript.ts may know TS names, as it knows the `scopes` map); gen-tm applies the map generically
+  // (look up + substitute), so the engine stays language-agnostic — a grammar declaring none is
+  // unaffected. REPLACES `repoAliases` (which left a redundant 2nd entry); this leaves none.
+  canonicalRepoNames?: Record<string, string | string[]>;
   // VS Code extension `contributes` data — packaging info a consumer needs to wire the
   // generated grammars into an editor (and to make Monogram's Vue a true drop-in for
   // vuejs/language-tools' files). All DATA the grammar declares; gen emits a pasteable

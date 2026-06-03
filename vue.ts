@@ -47,7 +47,8 @@ export default defineGrammar({
     // — through source.ts's PUBLIC repository keys (`#comment`, `#type`, `#punctuation-comma`) plus
     // the two literal matches it inlines (the variance keyword `extends|in|out`, and a default-`=`
     // that isn't `=>`). This is a true drop-in: those official key names now resolve in Monogram's
-    // own source.ts (via typescript.ts's `repoAliases`) AND in VS Code's official source.ts, so the
+    // own source.ts NATIVELY (typescript.ts's `canonicalRepoNames` 限制器 makes gen-tm emit `#comment`/
+    // `#type`/`#punctuation-comma` as the actual key names) AND in VS Code's official source.ts, so the
     // SAME vue grammar runs on either host (proven by test/vue-dropin.ts). Vue-only, so it extends
     // html.ts's `on*`/`style` embeds rather than polluting the HTML grammar.
     attributeEmbed: [...(htmlMarkup.attributeEmbed ?? []), {

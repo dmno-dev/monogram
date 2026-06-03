@@ -557,56 +557,52 @@ export default defineGrammar({
     'support.variable.property': jsScopes['support.variable.property'],
   },
 
-  // Repository-API ALIASES — the part that makes Monogram's source.ts a REPOSITORY-LEVEL drop-in
-  // for VS Code's official TypeScript grammar. External grammars (Vue, Markdown, MDX, …) `#include`
-  // the official's repository keys BY NAME (`source.ts#type`, `source.ts#comment`,
-  // `source.ts#punctuation-comma`, …). Monogram structures its repository under its OWN internal
-  // names (`#type-inner`, `#linecomment`/`#blockcomment`, `#scope-punctuation-separator-comma`), so
-  // those official names wouldn't resolve and an `#include` would silently no-op. These aliases add
-  // the official NAME as a thin re-export of Monogram's equivalent internal key(s) — additive, so
-  // Monogram's own references and emitted tokenization are completely unchanged (verified: the alias
-  // tokenizes identically to the official key — see test/ts-repo-compat.ts and the vue dual-host
-  // proof). The key NAMES are TypeScript-specific DATA and belong HERE (the grammar definition may
-  // know TS — it already carries the `scopes` map); gen-tm only copies the patterns through, so the
-  // engine stays language-agnostic. `expression` already matches the official by name, so it needs
-  // no alias (and an existing key is never overridden). Each entry mirrors what the official key
-  // produces: `type` = the full inner-type pattern list; `comment` = JSDoc/triple-slash/line/block
-  // (JSDoc + `///` BEFORE the plain `//`/`/*` forms, matching the official precedence);
-  // `punctuation-comma` = the comma separator (same scope, `punctuation.separator.comma.ts`).
-  repoAliases: {
-    // Publicly-embedded keys (external grammars `#include` these) — the drop-in API surface.
-    type: [{ include: '#type-inner' }],
-    comment: [
-      { include: '#jsdoc' },
-      { include: '#tripleslash' },
-      { include: '#linecomment' },
-      { include: '#blockcomment' },
-    ],
-    'punctuation-comma': [{ include: '#scope-punctuation-separator-comma' }],
-    // Name alignment: where Monogram already models the SAME construct as the official grammar but
-    // under its own key name, expose the OFFICIAL name too (verified same construct, not "硬追"
-    // internal keys Monogram doesn't have) — so a maintainer reviewing Monogram as a source.ts
-    // replacement sees the repository structure line up. Each is an additive alias to Monogram's
-    // existing region (never overrides). Byte-identical regions: qstring-* / type-parameters.
-    'qstring-double': [{ include: '#string-double' }],
-    'qstring-single': [{ include: '#string-single' }],
-    'type-parameters': [{ include: '#declaration-type-params' }],
-    'type-alias-declaration': [{ include: '#type-declaration' }],
-    'namespace-declaration': [{ include: '#module-declaration' }],
-    'directives': [{ include: '#tripleslash' }],
-    'type-object': [{ include: '#type-object-type' }],
-    'new-expr': [{ include: '#new-expression' }],
-    'cast': [{ include: '#type-cast' }],
-    'regex': [{ include: '#regex-literal' }],
-    'parameter-type-annotation': [{ include: '#param-type-annotation' }],
-    'parameter-name': [{ include: '#declaration-param-name' }],
-    'return-type': [{ include: '#type-annotation-return' }, { include: '#decl-return-type' }],
-    'type-predicate-operator': [{ include: '#is-typekw' }],
-    // NOT aliased: official `enum-declaration`/`interface-declaration` cover the WHOLE declaration
-    // (begin on the keyword), whereas Monogram's `enum-body`/`declaration-body` are only the `{…}`
-    // body — a partial match, so forcing the name would mislead. The rest of the official's ~120
-    // unmatched keys are its internal decomposition (one construct split across many keys) that
-    // Monogram models more coarsely — no corresponding entry to rename.
+  // Repository-key NAMING CONSTRAINT (官方命名「限制器」) — the part that makes Monogram's source.ts a
+  // REPOSITORY-LEVEL drop-in for VS Code's official TypeScript grammar. External grammars (Vue,
+  // Markdown, MDX, …) `#include` the official repository keys BY NAME (`source.ts#type`,
+  // `source.ts#qstring-double`, `source.ts#comment`, …). Monogram derives those keys under its OWN
+  // structural names (`#type-inner`, `#string-double`, `#linecomment`/`#blockcomment`, …), so the
+  // official names wouldn't resolve and an `#include` would silently no-op. Rather than ADD an alias
+  // entry next to each structural key (a redundant 2nd layer), this CONSTRAINS gen-tm's key emission:
+  // it maps each OFFICIAL name → the structural key(s) gen-tm derived for the SAME construct, and
+  // gen-tm projects the repository through it at generation time, emitting the canonical name NATIVELY
+  // (the structural key is RENAMED — its old name ceases to exist — and every `#…` reference is
+  // rewritten with it, so the repository holds ONE key, natively named). It is purely a naming
+  // projection — no `match`/`begin`/`name` changes — so the emitted tokenization is byte-for-byte
+  // unchanged (verified: test/ts-repo-compat.ts + the vue dual-host proof). The NAMES are
+  // TypeScript-specific DATA and belong HERE (the grammar definition may know TS — it already carries
+  // the `scopes` map); gen-tm only looks up + substitutes, staying language-agnostic.
+  //
+  // Two value forms encode the two construct↔key relationships gen-tm derives:
+  //   • STRING → the official construct maps 1:1 to ONE structural key; RENAME it (and all refs).
+  //   • ARRAY  → the official key is a UNION the official grammar itself writes as a `{patterns:[…]}`
+  //     wrapper (`#comment`, `#return-type`); Monogram derives the members as separate keys, so no
+  //     single rename carries the name — gen-tm SYNTHESISES the wrapper, resolving each member through
+  //     the 1:1 renames first (so `tripleslash`, renamed to `directives`, is included by that name).
+  // Official names that ALREADY name a real Monogram key are simply omitted here: `expression` and
+  // `namespace-declaration` (Monogram's `namespace`-keyword key) already match by name. (Monogram's
+  // `module-declaration` — the legacy `module X {}` form the official folds into `namespace-declaration`
+  // — stays Monogram-internal; it's a structural split, not a naming gap, so renaming it onto the
+  // already-taken `namespace-declaration` is neither needed nor safe.)
+  canonicalRepoNames: {
+    type: 'type-inner',
+    'punctuation-comma': 'scope-punctuation-separator-comma',
+    'qstring-double': 'string-double',
+    'qstring-single': 'string-single',
+    'type-parameters': 'declaration-type-params',
+    'type-alias-declaration': 'type-declaration',
+    'type-object': 'type-object-type',
+    'new-expr': 'new-expression',
+    cast: 'type-cast',
+    regex: 'regex-literal',
+    directives: 'tripleslash',
+    'parameter-type-annotation': 'param-type-annotation',
+    'parameter-name': 'declaration-param-name',
+    'type-predicate-operator': 'is-typekw',
+    // Unions (official wrapper keys): members keep their structural names but are resolved through the
+    // renames above — e.g. `tripleslash` → `directives` in `comment`.
+    comment: ['jsdoc', 'tripleslash', 'linecomment', 'blockcomment'],
+    'return-type': ['type-annotation-return', 'decl-return-type'],
   },
 
   entry: Program,
