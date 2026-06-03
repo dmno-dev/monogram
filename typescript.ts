@@ -569,7 +569,7 @@ export default defineGrammar({
   // (the structural key is RENAMED — its old name ceases to exist — and every `#…` reference is
   // rewritten with it, so the repository holds ONE key, natively named). It is purely a naming
   // projection — no `match`/`begin`/`name` changes — so the emitted tokenization is byte-for-byte
-  // unchanged (verified: test/ts-repo-compat.ts + the vue dual-host proof). The NAMES are
+  // unchanged (verified: test/repo-compat.ts + the vue dual-host proof). The NAMES are
   // TypeScript-specific DATA and belong HERE (the grammar definition may know TS — it already carries
   // the `scopes` map); gen-tm only looks up + substitutes, staying language-agnostic.
   //
