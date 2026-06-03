@@ -152,7 +152,7 @@
           "name": "punctuation.definition.tag.end.html"
         }
       },
-      "while": "^(?!\\s*</script[\\s>])",
+      "while": "^(?!.*</script[\\s>])",
       "contentName": "source.js",
       "patterns": [
         {
@@ -211,7 +211,7 @@
         },
         {
           "begin": "(?<=>)",
-          "while": "^(?!\\s*</script[\\s>])",
+          "while": "^(?!.*</script[\\s>])",
           "contentName": "source.js",
           "patterns": [
             {
@@ -281,7 +281,7 @@
           "name": "punctuation.definition.tag.end.html"
         }
       },
-      "while": "^(?!\\s*</style[\\s>])",
+      "while": "^(?!.*</style[\\s>])",
       "contentName": "source.css",
       "patterns": [
         {
@@ -340,7 +340,7 @@
         },
         {
           "begin": "(?<=>)",
-          "while": "^(?!\\s*</style[\\s>])",
+          "while": "^(?!.*</style[\\s>])",
           "contentName": "source.css",
           "patterns": [
             {
@@ -410,7 +410,7 @@
           "name": "punctuation.definition.tag.end.html"
         }
       },
-      "while": "^(?!\\s*</textarea[\\s>])",
+      "while": "^(?!.*</textarea[\\s>])",
       "contentName": "source.embedded",
       "patterns": [
         {
@@ -469,7 +469,7 @@
         },
         {
           "begin": "(?<=>)",
-          "while": "^(?!\\s*</textarea[\\s>])",
+          "while": "^(?!.*</textarea[\\s>])",
           "contentName": "source.embedded",
           "patterns": [
             {
@@ -539,7 +539,7 @@
           "name": "punctuation.definition.tag.end.html"
         }
       },
-      "while": "^(?!\\s*</title[\\s>])",
+      "while": "^(?!.*</title[\\s>])",
       "contentName": "source.embedded",
       "patterns": [
         {
@@ -598,7 +598,7 @@
         },
         {
           "begin": "(?<=>)",
-          "while": "^(?!\\s*</title[\\s>])",
+          "while": "^(?!.*</title[\\s>])",
           "contentName": "source.embedded",
           "patterns": [
             {

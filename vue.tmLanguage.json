@@ -185,7 +185,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</template[\\s>])",
+      "while": "^(?!.*</template[\\s>])",
       "contentName": "text.html.derivative",
       "patterns": [
         {
@@ -244,7 +244,7 @@
         },
         {
           "begin": "(?<=>)",
-          "while": "^(?!\\s*</template[\\s>])",
+          "while": "^(?!.*</template[\\s>])",
           "contentName": "text.html.derivative",
           "patterns": [
             {
@@ -314,7 +314,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</script[\\s>])",
+      "while": "^(?!.*</script[\\s>])",
       "contentName": "source.ts",
       "patterns": [
         {
@@ -382,7 +382,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</script[\\s>])",
+      "while": "^(?!.*</script[\\s>])",
       "contentName": "source.tsx",
       "patterns": [
         {
@@ -450,7 +450,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</script[\\s>])",
+      "while": "^(?!.*</script[\\s>])",
       "contentName": "source.js.jsx",
       "patterns": [
         {
@@ -518,7 +518,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</script[\\s>])",
+      "while": "^(?!.*</script[\\s>])",
       "contentName": "source.js",
       "patterns": [
         {
@@ -595,7 +595,7 @@
             },
             {
               "begin": "(?<=>)",
-              "while": "^(?!\\s*</script[\\s>])",
+              "while": "^(?!.*</script[\\s>])",
               "contentName": "source.ts",
               "patterns": [
                 {
@@ -635,7 +635,7 @@
             },
             {
               "begin": "(?<=>)",
-              "while": "^(?!\\s*</script[\\s>])",
+              "while": "^(?!.*</script[\\s>])",
               "contentName": "source.tsx",
               "patterns": [
                 {
@@ -675,7 +675,7 @@
             },
             {
               "begin": "(?<=>)",
-              "while": "^(?!\\s*</script[\\s>])",
+              "while": "^(?!.*</script[\\s>])",
               "contentName": "source.js.jsx",
               "patterns": [
                 {
@@ -697,7 +697,7 @@
         },
         {
           "begin": "(?<=>)",
-          "while": "^(?!\\s*</script[\\s>])",
+          "while": "^(?!.*</script[\\s>])",
           "contentName": "source.js",
           "patterns": [
             {
@@ -767,7 +767,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</style[\\s>])",
+      "while": "^(?!.*</style[\\s>])",
       "contentName": "source.css.scss",
       "patterns": [
         {
@@ -835,7 +835,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</style[\\s>])",
+      "while": "^(?!.*</style[\\s>])",
       "contentName": "source.css.less",
       "patterns": [
         {
@@ -903,7 +903,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</style[\\s>])",
+      "while": "^(?!.*</style[\\s>])",
       "contentName": "source.stylus",
       "patterns": [
         {
@@ -971,7 +971,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</style[\\s>])",
+      "while": "^(?!.*</style[\\s>])",
       "contentName": "source.postcss",
       "patterns": [
         {
@@ -1039,7 +1039,7 @@
           "name": "punctuation.definition.tag.end.vue"
         }
       },
-      "while": "^(?!\\s*</style[\\s>])",
+      "while": "^(?!.*</style[\\s>])",
       "contentName": "source.css",
       "patterns": [
         {
@@ -1116,7 +1116,7 @@
             },
             {
               "begin": "(?<=>)",
-              "while": "^(?!\\s*</style[\\s>])",
+              "while": "^(?!.*</style[\\s>])",
               "contentName": "source.css.scss",
               "patterns": [
                 {
@@ -1156,7 +1156,7 @@
             },
             {
               "begin": "(?<=>)",
-              "while": "^(?!\\s*</style[\\s>])",
+              "while": "^(?!.*</style[\\s>])",
               "contentName": "source.css.less",
               "patterns": [
                 {
@@ -1196,7 +1196,7 @@
             },
             {
               "begin": "(?<=>)",
-              "while": "^(?!\\s*</style[\\s>])",
+              "while": "^(?!.*</style[\\s>])",
               "contentName": "source.stylus",
               "patterns": [
                 {
@@ -1236,7 +1236,7 @@
             },
             {
               "begin": "(?<=>)",
-              "while": "^(?!\\s*</style[\\s>])",
+              "while": "^(?!.*</style[\\s>])",
               "contentName": "source.postcss",
               "patterns": [
                 {
@@ -1258,7 +1258,7 @@
         },
         {
           "begin": "(?<=>)",
-          "while": "^(?!\\s*</style[\\s>])",
+          "while": "^(?!.*</style[\\s>])",
           "contentName": "source.css",
           "patterns": [
             {

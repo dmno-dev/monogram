@@ -3114,14 +3114,19 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
       },
     };
     // (2) multi-line `begin/while` — the `while` re-checks each line and DROPS the region
-    //     (popping any open embedded region) at the `</tag>` line, so the embed can't
-    //     swallow past the close tag even mid-construct (fixes the trailing-type bug). The
-    //     `^` anchor is required; the close tag itself is then matched by the host #tag.
+    //     (popping any open embedded region) at the first line CONTAINING `</tag>` (the `.*`
+    //     reaches it anywhere on the line, not just `^\s*` at the start). So the close wins even
+    //     MID-LINE: a `</script>` after a JS `//` comment (tmbundle#85) — or inside a JS string —
+    //     still closes the element, matching parse5 / the HTML tokenizer, which close at the FIRST
+    //     `</script>` regardless of embedded-language context. The embed stays ONE continuous
+    //     region across lines (the `while` only TESTS, never re-anchors), so a multi-line template
+    //     literal / block comment in the body is unbroken; only a line that actually contains the
+    //     close tag drops. Also fixes the trailing-type bug. The close tag is matched by host #tag.
     repository[key] = {
       name: `meta.${tag}.${L}`,
       begin: `(${o})(${tag})\\b${attrs}(${c})`,
       beginCaptures: { '1': { name: sOpen }, '2': { name: sName }, '3': attrCap, '4': { name: sClose } },
-      while: `^(?!\\s*${o}${slash}${tag}[\\s${ccClose}])`,
+      while: `^(?!.*${o}${slash}${tag}[\\s${ccClose}])`,
       contentName: embed,
       patterns: [{ include: embed }],
     };
@@ -3142,7 +3147,7 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
     const closeAhead = `${o}${slash}${tag}[\\s${ccClose}]`;            // `</tag` then ws / `>`
     const content = (embed: string): TmPattern[] => [                 // body after `>`, bounded at `</tag>`
       { begin: `(?<=${c})(?=[^\\n]*${closeAhead})`, end: `(?=${closeAhead})`, contentName: embed, patterns: [{ include: embed }] },
-      { begin: `(?<=${c})`, while: `^(?!\\s*${closeAhead})`, contentName: embed, patterns: [{ include: embed }] },
+      { begin: `(?<=${c})`, while: `^(?!.*${closeAhead})`, contentName: embed, patterns: [{ include: embed }] },
     ];
     const langAlt = langs.map(([v]) => escapeRegex(v)).join('|');
     const langLA = langAlt ? `\\blang\\s*=\\s*["']?(?:${langAlt})\\b` : '';

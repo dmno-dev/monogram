@@ -68,47 +68,30 @@ export const cases: HtmlCase[] = [
   { id: 'tmbundle#74', title: '`<` of `</style>` is HTML punctuation, not `source.css`', src: '<style>.a{}</style>',
     at: '<', nth: 1, want: s => isTagPunct(s) && !isCss(s) },                 // same leak for CSS (close `<` = 2nd `<`, nth:1): official tags the `</style>` `<` with source.css-ignored-vscode; Monogram closes the embed first, keeping it clean tag punctuation
   { id: 'tmbundle#85', title: '`//</script>` on its own line still closes the script', src: '<script>\n//</script>\n<p>z</p>',
-    at: 'z', want: s => !isJs(s) },                                          // ONLY-OFFICIAL, and a DEFENSIBLE tradeoff (proven, not a silent miss):
-    //   The fix and the win are MUTUALLY EXCLUSIVE under the agnostic constraint, because of how
-    //   vscode-textmate arbitrates a host region's close against a SEPARATE embedded grammar:
-    //     • Monogram's multi-line raw-text region is `begin/while` (`while: ^(?!\s*</script…)`).
-    //       `while`'s line-start re-check is the ONLY TextMate mechanism that force-UNWINDS a
-    //       still-open embedded *multi-line* construct (a TS `meta.type.body`, a JS template/regex)
-    //       at the close-tag line — which is exactly what wins #5538/#2060 (`export type T` with no
-    //       `;` before `</script>`) and keeps the close `<` CLEAN tag punctuation (the #65/#74 win).
-    //       But `while` is `^`-anchored, so it can only drop the region when a line *starts* with
-    //       `</script>`; it structurally cannot catch the MID-LINE close in `//</script>` → #85 stuck.
-    //     • Switching to `begin/end` (end = `(?=^\s*</tag)|(<)(?=/tag)`, both the line-start and the
-    //       per-position alt, i.e. the official's own shape) was BUILT + MEASURED here: it still
-    //       FAILS #85 *and* REGRESSES #5538 to 18/19. It fails #85 because Monogram embeds the REAL
-    //       `source.js`, whose line comment is `match: //[^\n]*` — a leftmost-match that claims the
-    //       whole `//</script>` line at col 0 before the host `end` (at col 2) is ever tried; an
-    //       `end`/sibling rule cannot preempt an embedded rule that matches at an earlier column.
-    //       It regresses #5538 because `begin/end` does NOT unwind the open embedded TS type-body at
-    //       the close line (only `while` does) → that body swallows `</script>` and the template
-    //       never recovers. (Confirmed: vue-issues 18/19, vue-dropin 18/19 under that form.)
-    //     • The #113 CAPTURE-EMBED (the body is a regex CAPTURE group; TextMate re-anchors the embed to
-    //       that FIXED span, so a `//` physically can't escape it) is exactly what closes the SINGLE-LINE
-    //       form — the inline `match` path, why #72 `<script>//…</script>` works. Extending it to the
-    //       multi-line body (a PER-LINE bounded capture) was BUILT + MEASURED: it DOES fix #85 (and
-    //       #65/#74), but re-anchors source.js EACH LINE, so any cross-line JS construct splits — a
-    //       template literal `` `a⏎b` `` becomes two embeds (`a` an unterminated string, `b` re-parsed
-    //       as code) instead of one string carried across the break, which the `begin/while` region
-    //       embed gets RIGHT (verified: `a`,`b` both `string.template` continuous). The bound that makes
-    //       a capture-embed safe is inherently single-line — a `match` can't span lines — so multi-line
-    //       either re-anchors (breaking the FAR commoner cross-line template / block-comment / regex) or
-    //       needs the official's hand-patch below. Trading those for the rare #85 is a net loss.
-    //   VS Code "wins" both ONLY by NOT using the real embed: it re-declares JS's own comment / block
-    //   / string rules with a baked-in `end:(?=</script)|\n` guard before `include source.js`, so the
-    //   comment voluntarily yields before the close tag. That is a JS-syntax-specific patch — to copy
-    //   it, gen-tm.ts would have to KNOW the embedded language has `//`,`/*…*/`, backticks, regex (and
-    //   rewrite each with a `</script>` guard), violating the agnostic constraint (delimiters/tag are
-    //   config DATA; the embedded language's comment grammar is not). And the official PAYS for #85
-    //   with the very leak Monogram beats it on: its `(<)(?=/script)` end marks EVERY close-tag `<`
-    //   `source.js-ignored-vscode` (contains `source.js`) — see #65/#74, which Monogram keeps clean.
-    //   So: Monogram trades the rare `//</script>` mid-comment close (multi-line `<script>` only; the
-    //   single-line `<script>//…</script>` #72 closes fine on the inline path) to keep the common
-    //   clean close (#65/#74) and the trailing-type unwind (#5538) — and stays language-agnostic.
+    at: 'z', want: s => !isJs(s) },                                          // MONOGRAM ✓ — fixed AGNOSTICALLY (no JS-syntax knowledge), DISPROVING the earlier "tradeoff":
+    //   Monogram's multi-line raw-text region is `begin/while`; the `while` re-checks each line at `^`
+    //   and DROPS the region (force-unwinding any still-open embedded construct) BEFORE that line
+    //   tokenizes. The fix WIDENED its negative lookahead from the line START (`^(?!\s*</tag…)`) to the
+    //   WHOLE line (`^(?!.*</tag…)`): the region now drops at the start of ANY line CONTAINING `</script>`,
+    //   not only one that begins with it. That catches the mid-line close in `//</script>` (the embed's
+    //   `//` line-comment would otherwise claim the whole line at col 0, which no host `end`/sibling rule
+    //   can preempt — a leftmost embedded match wins). It stays AGNOSTIC: the lookahead keys only on the
+    //   configured tag + `<`/`/`/`>` delimiters (DATA), never on the embed's `//`,`/*…*/`, backtick or
+    //   regex. And it is MORE faithful to the markup oracle — parse5 closes <script> at the FIRST
+    //   `</script>` regardless of JS context (even inside a string/template/comment), so dropping on any
+    //   line containing it IS the spec, not an over-drop. Because the embed stays ONE continuous region
+    //   (the `while` only TESTS), a multi-line template/comment/string with no `</script>` inside is
+    //   untouched (`<script>\nconst x=\`a\nb\`\n</script>` stays one continuous string.template); and the
+    //   line-START drop still force-unwinds an open TS type-body, so the trailing-type unwind (#5538/#2060)
+    //   and the clean close `<` (#65/#74) are preserved. `</tag[\s>]` needs the slash, so a bare `<` in
+    //   the body (`a < b`, `x<y>`) does NOT drop — it stays embedded, matching parse5.
+    //   EARLIER (and wrongly framed as a proven tradeoff): a `begin/end` form (end = `(?=^\s*</tag)|(<)(?=
+    //   /tag)`, the official's shape) was measured + REJECTED — it FAILED #85 (source.js `//[^\n]*` claims
+    //   col 0 before the host `end` at col 2) AND regressed #5538 (begin/end doesn't unwind the open type-
+    //   body at the close line — only `while` does). The whole-line `while` keeps that unwind while ALSO
+    //   reaching the mid-line close, winning both. (VS Code instead HAND-PATCHES JS's own comment/string
+    //   rules with a baked-in `end:(?=</script)|\n` — JS-syntax-specific, and it PAYS with a
+    //   `source.js-ignored-vscode` leak on EVERY close `<`, the #65/#74 cases Monogram keeps clean.)
   { id: 'tmbundle#51', title: 'self-closing `/` is tag punctuation', src: '<img src="a.png" />',
     at: '/', want: isTagPunct },                                             // both scope the `/` of `/>` as punctuation.definition.tag (was plain text in old TextMate)
   { id: 'tmbundle#82', title: '`<script type="application/json">` body is not parsed as HTML', src: '<script type="application/json">{"k":1}</script>',
