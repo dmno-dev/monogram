@@ -1146,6 +1146,14 @@ function generateJsxPatterns(langName: string, identRegex: string, jsx: JsxInfo,
       { include: '#jsx-self-closing-element' },
       { include: '#jsx-element' },
       { include: '#jsx-fragment' },
+      // A tag whose `<` is alone at end-of-line, its NAME on a following line
+      // (#825). In children a lone `<` is unambiguously a tag opener (a bare `<`
+      // in JSX children is otherwise invalid — tsc rejects `<div>a < b</div>`),
+      // so this multi-line opener can recover the split tag the single-line
+      // `(<)\s*name` begins miss. Listed AFTER the single-line elements so a
+      // normal `<span …>` on one line keeps its existing tokenization; it only
+      // fires when the `<` reaches EOL with no name. See #jsx-element-multiline.
+      { include: '#jsx-element-multiline' },
       { include: '#jsx-expression' },
       { include: '#jsx-entity' },
     ],
@@ -1261,6 +1269,72 @@ function generateJsxPatterns(langName: string, identRegex: string, jsx: JsxInfo,
         end: `(?=${escapeRegex(jsx.closeTok)})`,
         contentName: `meta.jsx.children.${langName}`,
         patterns: [{ include: '#jsx-children' }],
+      },
+    ],
+  };
+
+  // ── jsx-element-multiline: `<` alone at EOL, tag NAME on a later line (#825) ──
+  // The single-line tag-open begins (`(<)\s*name`) can't span the `<`/name line
+  // break because a TextMate `begin` regex is matched within ONE tokenizeLine, so
+  // its `\s*` never crosses a newline. This region decouples the two: it opens on a
+  // lone `<` (one whose only same-line tail is whitespace — `(<)(?=\s*$)`), scoping
+  // it `punctuation.definition.tag.begin`, then its INNER patterns — applied
+  // per-line while the region stays open — pick up the name (with leading
+  // whitespace) when it arrives on a following line, exactly like a single-line
+  // open tag's attributes are matched line by line.
+  //
+  // Children-only and unambiguous: in JSX children a bare `<` is ALWAYS a tag
+  // opener (tsc rejects a stray `<` in children — `<div>a < b</div>` is a parse
+  // error), so a lone `<` reaching EOL here can only be a split tag-open. The
+  // `(?=\s*$)` guard means it fires ONLY when no name follows on the same line, so
+  // a normal `<span …>` / self-closing `<br/>` / close `</span>` on one line keep
+  // their existing (single-line) tokenization untouched. It lives only inside
+  // `#jsx-children`, never at expression-start, so a split comparison `a <\n b` or
+  // generic `f<\n T>` outside JSX is never reached.
+  //
+  // Handles BOTH shapes after the split: a self-closing `<\n name … />` ends at the
+  // `/>` (first `end` alternative), and an open `<\n name …> … </name>` runs through
+  // an inner open-tag-body (name + type-args + attributes up to `>`) into a children
+  // region and ends at the matching `</name>` (second `end` alternative).
+  result['jsx-element-multiline'] = {
+    name: `meta.tag.${langName}`,
+    begin: '(<)(?=\\s*$)',
+    beginCaptures: { '1': { name: tagBegin } },
+    // End on EITHER the self-close `/>` (self-closing split tag) OR the `</name>`
+    // close (open split tag). The self-close alt is first so `/>` wins over a stray
+    // `>` interpretation; its capture group is 1, the close-tag groups are 2 (`</`),
+    // 3..7 (name sub-captures), 8 (`>`).
+    end: `(?:(${escapeRegex(jsx.selfCloseTok)})|(${escapeRegex(jsx.closeTok)})\\s*(?:${nameRe})?\\s*(>))`,
+    endCaptures: {
+      '1': { name: tagEnd },
+      '2': { name: tagBegin },
+      ...nameCaptures(3),   // name sub-captures 3..7 (ns, sep, member, intrinsic, component)
+      '8': { name: tagEnd },
+    },
+    patterns: [
+      // children region — entered the moment the open tag's `>` has been seen, and
+      // listed FIRST so its zero-width `(?<=>)` begin wins at the `>` boundary over
+      // the open-tag-body's name match below. This is what stops the name pattern
+      // from re-firing on a child word (e.g. `txt` in `<\n span>txt</span>`): once
+      // `>` opens this region, matching is confined to `#jsx-children` (which does
+      // NOT include the open-tag body), so a bare child word stays `meta.jsx.children`
+      // instead of being mis-scoped as a second tag name. Before any `>` this begin
+      // can't match (no preceding `>`), so the open-tag body picks up the name first.
+      {
+        begin: '(?<=>)',
+        end: `(?=${escapeRegex(jsx.closeTok)})`,
+        contentName: `meta.jsx.children.${langName}`,
+        patterns: [{ include: '#jsx-children' }],
+      },
+      // open-tag body: the NAME (on a later line, leading ws consumed) then
+      // type-args / attributes, up to — but not consuming — the `>` or `/>` (the
+      // outer `end` closes a self-close `/>`; a plain `>` opens the children above).
+      {
+        begin: `\\s*${nameRe}`,
+        beginCaptures: nameCaptures(1),
+        end: `(>)|(?=${escapeRegex(jsx.selfCloseTok)})`,
+        endCaptures: { '1': { name: tagEnd } },
+        patterns: [...tagTypeArgsInclude, { include: '#jsx-attributes' }],
       },
     ],
   };

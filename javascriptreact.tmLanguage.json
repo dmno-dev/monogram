@@ -259,6 +259,9 @@
           "include": "#jsx-fragment"
         },
         {
+          "include": "#jsx-element-multiline"
+        },
+        {
           "include": "#jsx-expression"
         },
         {
@@ -505,6 +508,111 @@
           "patterns": [
             {
               "include": "#jsx-children"
+            }
+          ]
+        }
+      ]
+    },
+    "jsx-element-multiline": {
+      "name": "meta.tag.js.jsx",
+      "begin": "(<)(?=\\s*$)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.js.jsx"
+        }
+      },
+      "end": "(?:(/>)|(</)\\s*(?:(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(:))?(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\.(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)+)|([[:lower:]][-[:alnum:]]*)|([_$[:upper:]][-_$[:alnum:].]*|(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:[-.][_$[:alnum:]]+)+))(?<!\\.|-))?\\s*(>))",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.end.js.jsx"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.js.jsx"
+        },
+        "3": {
+          "name": "entity.name.tag.namespace.js.jsx"
+        },
+        "4": {
+          "name": "punctuation.separator.namespace.js.jsx"
+        },
+        "5": {
+          "patterns": [
+            {
+              "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*\\.)",
+              "name": "variable.other.object.js.jsx"
+            },
+            {
+              "match": "\\.",
+              "name": "punctuation.accessor.js.jsx"
+            },
+            {
+              "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
+              "name": "support.class.component.js.jsx"
+            }
+          ]
+        },
+        "6": {
+          "name": "entity.name.tag.js.jsx"
+        },
+        "7": {
+          "name": "support.class.component.js.jsx"
+        },
+        "8": {
+          "name": "punctuation.definition.tag.end.js.jsx"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "(?<=>)",
+          "end": "(?=</)",
+          "contentName": "meta.jsx.children.js.jsx",
+          "patterns": [
+            {
+              "include": "#jsx-children"
+            }
+          ]
+        },
+        {
+          "begin": "\\s*(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(:))?(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\.(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)+)|([[:lower:]][-[:alnum:]]*)|([_$[:upper:]][-_$[:alnum:].]*|(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:[-.][_$[:alnum:]]+)+))(?<!\\.|-)",
+          "beginCaptures": {
+            "1": {
+              "name": "entity.name.tag.namespace.js.jsx"
+            },
+            "2": {
+              "name": "punctuation.separator.namespace.js.jsx"
+            },
+            "3": {
+              "patterns": [
+                {
+                  "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*\\.)",
+                  "name": "variable.other.object.js.jsx"
+                },
+                {
+                  "match": "\\.",
+                  "name": "punctuation.accessor.js.jsx"
+                },
+                {
+                  "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
+                  "name": "support.class.component.js.jsx"
+                }
+              ]
+            },
+            "4": {
+              "name": "entity.name.tag.js.jsx"
+            },
+            "5": {
+              "name": "support.class.component.js.jsx"
+            }
+          },
+          "end": "(>)|(?=/>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.tag.end.js.jsx"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#jsx-attributes"
             }
           ]
         }

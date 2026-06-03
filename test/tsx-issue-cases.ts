@@ -9,10 +9,11 @@
 // into one component token. The derived grammar disambiguates both. (#1033 — a JSX component
 // with a generic type argument — the official already handles; Monogram now matches it.)
 //
-// The ledger is HONEST, not cherry-picked: it also keeps cases the derived grammar ties or loses —
-// #825 is a both-fail (a `<` and the tag name split across lines defeats both line-oriented
-// grammars, the one remaining only/no-one-solves case). The rest the derived grammar now wins or
-// ties: #794 / #754 / #585 / #667 / #624 / #1033 are both-pass — a non-null `!` then `/` division
+// The ledger is HONEST, not cherry-picked. #825 — a `<` and the tag name split across lines —
+// defeats the official (a TextMate `begin` is single-line, so its tag-open can't span the break);
+// the derived grammar recovers it with a children-only multi-line tag-open (a lone `<` is an
+// unambiguous tag opener inside JSX children), so #825 is now an only-Monogram win. The rest the
+// derived grammar wins or ties: #794 / #754 / #585 / #667 / #624 / #1033 are both-pass — a non-null `!` then `/` division
 // keeps the `/>` closing the tag; a JSX element after a `/**/` block comment switches into JSX; a
 // `//` comment inside an open tag is scoped as a comment; real reported cascades both now handle.
 // Each of #794 / #754 / #585 was an only-official miss until the derived grammar caught up. #754 in
@@ -87,17 +88,20 @@ export const cases: Case[] = [
   { id: '#754', title: 'JSX element right after a `/**/` block comment', src: `const a = /**/ <Element />;`,
     checks: [{ at: 'Element', want: isTag, desc: 'the post-comment `<Element />` is a JSX tag, not a `<` comparison' }] },
 
-  // #825 (BOTH miss this — a PROVEN structural TM limit). `<` and the tag name split across lines —
+  // #825 (only-Monogram — the official still misses it). `<` and the tag name split across lines —
   // a chevron alone on one line, the name on the next. Valid JSX (tsc: nested JsxElements, 0 diags)
-  // and Monogram's PARSER accepts it; the gap is purely the highlighter. A TextMate `begin` regex is
-  // single-line, so the tag-open `(<)\s*name` cannot span the `<`/name line break — `\s*` never
-  // crosses the newline within one `tokenizeLine`. A multi-line construct can't recover it cleanly
-  // either: a lone `<` is only unambiguously a tag inside children (a bare `<` elsewhere is a split
-  // comparison `a <\n b` or generic `f<\n T>`), and even in children it would need a bespoke
-  // multi-line tag-open neither line-oriented grammar implements. Both scope `span` as
-  // `meta.jsx.children` (plain text). The frontier neither reaches today.
+  // and Monogram's PARSER accepts it. A TextMate `begin` regex is single-line, so the single-line
+  // tag-open `(<)\s*name` cannot span the `<`/name line break — `\s*` never crosses the newline
+  // within one `tokenizeLine`, which is why the official (and Monogram's single-line elements) leave
+  // `span` as `meta.jsx.children`. The official has no recovery; Monogram does. The lone `<` here is
+  // in JSX CHILDREN, where a bare `<` is ALWAYS a tag opener (tsc rejects a stray `<` in children —
+  // `<div>a < b</div>` is a parse error), so it is UNAMBIGUOUS. Monogram adds a children-only
+  // multi-line tag-open (gen-tm's `jsx-element-multiline`): it opens on a lone `<` reaching EOL
+  // (`(<)(?=\s*$)`) and recovers the name — plus attributes, type-args, children, and the matching
+  // close — when they arrive on following lines. Scoped to children (never expression-start), so a
+  // split comparison `a <\n b` or generic `f<\n T>` outside JSX is untouched. `span` → `entity.name.tag`.
   { id: '#825', title: '`<` and tag name on separate lines', src: `const demo =\n  <div>\n    <\n      span className="foo">\n    </span>\n  </div>;`,
-    checks: [{ at: 'span', want: isTag, desc: 'the `span` after a lone `<` is a tag name, not JSX text (both grammars miss this)' }] },
+    checks: [{ at: 'span', want: isTag, desc: 'the `span` after a lone `<` is a tag name, not JSX text (Monogram recovers the split tag; official misses it)' }] },
 
   // #667 (BOTH solve this now). An arrow function plus a ternary inside a JSX attribute used to
   // cascade — the ternary LHS was mis-scoped `meta.parameters` and broke the rest. Both grammars now

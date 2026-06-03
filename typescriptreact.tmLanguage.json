@@ -480,6 +480,9 @@
           "include": "#jsx-fragment"
         },
         {
+          "include": "#jsx-element-multiline"
+        },
+        {
           "include": "#jsx-expression"
         },
         {
@@ -752,6 +755,114 @@
           "patterns": [
             {
               "include": "#jsx-children"
+            }
+          ]
+        }
+      ]
+    },
+    "jsx-element-multiline": {
+      "name": "meta.tag.tsx",
+      "begin": "(<)(?=\\s*$)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.tsx"
+        }
+      },
+      "end": "(?:(/>)|(</)\\s*(?:(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(:))?(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\.(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)+)|([[:lower:]][-[:alnum:]]*)|([_$[:upper:]][-_$[:alnum:].]*|(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:[-.][_$[:alnum:]]+)+))(?<!\\.|-))?\\s*(>))",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.end.tsx"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.tsx"
+        },
+        "3": {
+          "name": "entity.name.tag.namespace.tsx"
+        },
+        "4": {
+          "name": "punctuation.separator.namespace.tsx"
+        },
+        "5": {
+          "patterns": [
+            {
+              "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*\\.)",
+              "name": "variable.other.object.tsx"
+            },
+            {
+              "match": "\\.",
+              "name": "punctuation.accessor.tsx"
+            },
+            {
+              "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
+              "name": "support.class.component.tsx"
+            }
+          ]
+        },
+        "6": {
+          "name": "entity.name.tag.tsx"
+        },
+        "7": {
+          "name": "support.class.component.tsx"
+        },
+        "8": {
+          "name": "punctuation.definition.tag.end.tsx"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "(?<=>)",
+          "end": "(?=</)",
+          "contentName": "meta.jsx.children.tsx",
+          "patterns": [
+            {
+              "include": "#jsx-children"
+            }
+          ]
+        },
+        {
+          "begin": "\\s*(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)(:))?(?:((?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:\\.(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*)+)|([[:lower:]][-[:alnum:]]*)|([_$[:upper:]][-_$[:alnum:].]*|(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?:[-.][_$[:alnum:]]+)+))(?<!\\.|-)",
+          "beginCaptures": {
+            "1": {
+              "name": "entity.name.tag.namespace.tsx"
+            },
+            "2": {
+              "name": "punctuation.separator.namespace.tsx"
+            },
+            "3": {
+              "patterns": [
+                {
+                  "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*(?=\\s*\\.)",
+                  "name": "variable.other.object.tsx"
+                },
+                {
+                  "match": "\\.",
+                  "name": "punctuation.accessor.tsx"
+                },
+                {
+                  "match": "(?:[a-zA-Z_$\\p{L}\\p{Nl}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})(?:[a-zA-Z0-9_$\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}]|\\\\u[0-9a-fA-F]{4}|\\\\u\\{[0-9a-fA-F]+\\})*",
+                  "name": "support.class.component.tsx"
+                }
+              ]
+            },
+            "4": {
+              "name": "entity.name.tag.tsx"
+            },
+            "5": {
+              "name": "support.class.component.tsx"
+            }
+          },
+          "end": "(>)|(?=/>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.tag.end.tsx"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#jsx-tag-type-arguments"
+            },
+            {
+              "include": "#jsx-attributes"
             }
           ]
         }
