@@ -29,8 +29,12 @@ const COV = [
 ];
 const GAP = [
   { lang: 'TypeScript', script: 'test/scope-gap-ts.ts', args: ['800'] },
+  { lang: 'JavaScript', script: 'test/scope-gap-js.ts', args: ['800'] },
+  { lang: 'JSX', script: 'test/scope-gap-jsx.ts', args: [] },
+  { lang: 'TSX', script: 'test/scope-gap-tsx.ts', args: [] },
   { lang: 'HTML', script: 'test/scope-gap-html.ts', args: [] },
   { lang: 'YAML', script: 'test/scope-gap-yaml.ts', args: [] },
+  { lang: 'Vue', script: 'test/scope-gap-vue.ts', args: [] },
 ];
 
 const pct = (v: number | null | undefined) => (v == null ? '—' : v.toFixed(1) + '%');
@@ -42,7 +46,7 @@ const gapRows = GAP.map((a) => { console.error('  ' + a.lang); return { lang: a.
 
 const covBy = new Map(covRows.map((x) => [x.lang, x.r]));
 const gapBy = new Map(gapRows.map((x) => [x.lang, x.r]));
-const LANGS = ['TypeScript', 'JavaScript', 'JSX', 'TSX', 'HTML', 'YAML'];
+const LANGS = ['TypeScript', 'JavaScript', 'JSX', 'TSX', 'HTML', 'YAML', 'Vue'];
 
 let md = '';
 md += "Per-grammar alignment vs the **official parser** as the neutral oracle (`node test/coverage-table.ts --write`). *Parser* = Monogram's parser vs the official parser: `branch` = source-coverage-anchored branch alignment, `agree` = bidirectional accept/reject (tree-equality for structural oracles) — `test/src-coverage.ts`. *Highlighter* = Monogram's derived TextMate grammar vs the official one, both graded against the parser's token roles — `test/scope-gap.ts`, the [vscode#203212](https://github.com/microsoft/vscode/issues/203212) comparison.\n\n";
