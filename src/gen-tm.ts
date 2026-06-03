@@ -3063,14 +3063,17 @@ function detectConstructorKeywords(
 // it → quotes left unscoped (Vue passes it from `d.valueString`; HTML from the string-punct scopes).
 // `assign` arrives pre-escaped; `quotes` raw; `quoteCc` is the char-class-escaped quote set.
 function embedValuePatterns(
-  embed: string, include: string, eqScope: string,
+  embed: string, include: string | TmPattern[], eqScope: string,
   assign: string, quotes: string[], quoteCc: string,
   str?: { begin: string; end: string },
 ): TmPattern[] {
+  // The value tokenizers: a single `#include` (the common case) OR a hand-rolled pattern LIST (when
+  // one include can't tokenize the value across host grammars — see Vue `generic=`, MarkupConfig).
+  const valPats: TmPattern[] = Array.isArray(include) ? include : [{ include }];
   const valueCap = (q: string): TmPattern => {
     const captures: Record<string, TmCapture> = {
       '1': { name: eqScope },
-      '3': { name: embed, patterns: [{ include }] },
+      '3': { name: embed, patterns: valPats },
     };
     if (str) { captures['2'] = { name: str.begin }; captures['4'] = { name: str.end }; }
     return { match: `(${assign})\\s*(${escapeRegex(q)})([^${escapeForCharClass(q)}]*)(${escapeRegex(q)})`, captures };
@@ -3082,7 +3085,7 @@ function embedValuePatterns(
       beginCaptures: str ? { '1': { name: eqScope }, '2': { name: str.begin } } : { '1': { name: eqScope } },
       end: `\\2`,
       ...(str ? { endCaptures: { '0': { name: str.end } } } : {}),
-      contentName: embed, patterns: [{ include }],
+      contentName: embed, patterns: valPats,
     },
   ];
 }
@@ -3310,7 +3313,7 @@ function generateMarkupTm(grammar: CstGrammar, grammarName: string, scopeName: s
     begin: `(${spec.namePattern})(?![\\w:.-])`,
     beginCaptures: { '1': { name: sAttr } },
     end: `(?=[\\s${escapeForCharClass(m.tagClose)}${escapeForCharClass(m.closeMarker ?? '/')}])`,
-    patterns: embedValuePatterns(spec.embed, spec.include ?? spec.embed, sEq, assign, attrQuotes, quoteCc, { begin: sStrPunctB, end: sStrPunctE }),
+    patterns: embedValuePatterns(spec.embed, spec.valuePatterns ?? spec.include ?? spec.embed, sEq, assign, attrQuotes, quoteCc, { begin: sStrPunctB, end: sStrPunctE }),
   }));
   repository['attribute'] = {
     patterns: [

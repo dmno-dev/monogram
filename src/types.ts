@@ -52,6 +52,21 @@ export interface RawEmbed {
 }
 
 /**
+ * A raw TextMate pattern, passed through verbatim into the generated grammar. Used where a markup
+ * grammar legitimately knows the SHAPE of an embedded sub-language fragment and must hand-roll the
+ * pattern list (as Volar's hand-written Vue grammar does for `generic=`): the GENERATOR stays
+ * agnostic and just emits the DATA. A pattern is either an `include` (which silently no-ops if the
+ * referenced key is absent — so listing both a Monogram key and the official-TS key resolves to
+ * whichever host grammar is loaded) or a literal `match`/`name` (host-independent).
+ */
+export interface RawTmPattern {
+  include?: string;
+  match?: string;
+  name?: string;
+  captures?: Record<string, { name?: string }>;
+}
+
+/**
  * Declarative markup-mode tokenization (opt-in, e.g. HTML/Vue). When a grammar
  * declares `markup`, the lexer runs a text / tag / raw-text STATE MACHINE instead
  * of the pure token stream: text between tags is one TEXT token (whitespace and
@@ -86,7 +101,15 @@ export interface MarkupConfig {
   // SCOPE — e.g. an inline `style="…"` carries a CSS *declaration list* (no selector/braces), so it
   // embeds scope `source.css` but is tokenized by `source.css#rule-list-innards` (property:value),
   // not the stylesheet root (which would mis-read `color:red` as a selector). Defaults to `embed`.
-  attributeEmbed?: { namePattern: string; embed: string; include?: string }[];
+  // `valuePatterns` (optional) replaces the single `include` with a HAND-ROLLED pattern list for the
+  // embedded value — for when no single include can tokenize it across host grammars. Vue `<script
+  // setup generic="T extends U, in V = D">` carries a TS type-PARAMETER list, and the repo key for
+  // "a type" differs between Monogram's source.ts (`#type-inner`) and VS Code's OFFICIAL source.ts
+  // (`#type`); one include satisfies only one host. So vue.ts supplies the official grammar's exact
+  // list — literal `match`es for `extends`/`in`/`out`/`=`/`,` (host-agnostic) plus type/comment
+  // includes that list BOTH host keys (an unresolved `#include` silently no-ops in vscode-textmate,
+  // so the value tokenizes as TS under EITHER source.ts). When set, `include` is ignored for the attr.
+  attributeEmbed?: { namePattern: string; embed: string; include?: string; valuePatterns?: RawTmPattern[] }[];
   // Elements whose content is raw (CDATA-like): after the start tag's `tagClose`,
   // everything up to the matching `tagOpen+closeMarker+name` is one `token`. `embed`
   // optionally maps a tag → the grammar scope to embed in its body (e.g. Vue SFC blocks:

@@ -42,11 +42,25 @@ export default defineGrammar({
   },
   markup: {
     ...htmlMarkup,
-    // Vue `<script setup generic="T, U extends V">`: the value is a TS TYPE-PARAMETER list, not a
-    // string. Embed it as source.ts#type-inner (T/U → entity.name.type, `extends`/`in`/`out` → the
-    // variance keyword, `,` → separator) — Vue-only, so it extends html.ts's `on*`/`style` embeds
-    // rather than polluting the HTML grammar. The bracket-less list is exactly #type-inner's shape.
-    attributeEmbed: [...(htmlMarkup.attributeEmbed ?? []), { namePattern: 'generic', embed: 'source.ts', include: 'source.ts#type-inner' }],
+    // Vue `<script setup generic="T extends U, in V = D">`: the value is a TS TYPE-PARAMETER list, not
+    // a string. There is no single repo key for "a bracket-less type-param list" — and even "a type"
+    // is named differently across hosts (Monogram's source.ts has `#type-inner`, VS Code's OFFICIAL
+    // source.ts has `#type`). Since the published Vue grammar embeds whichever source.ts the editor
+    // ships, we hand-roll the list exactly like Volar's own grammar does — literal matches for the
+    // variance modifiers / default `=` / comma (host-independent) plus type & comment includes that
+    // list BOTH host keys (an unresolved `#include` silently no-ops, so it tokenizes as TS under
+    // EITHER source.ts). Vue-only (extends html.ts's on*/style embeds; doesn't touch the HTML grammar).
+    attributeEmbed: [...(htmlMarkup.attributeEmbed ?? []), {
+      namePattern: 'generic', embed: 'source.ts', valuePatterns: [
+        { include: 'source.ts#comment' },                                       // official TS
+        { include: 'source.ts#blockcomment' }, { include: 'source.ts#linecomment' }, // Monogram TS
+        { name: 'storage.modifier.ts', match: '(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(extends|in|out)(?![_$[:alnum:]])(?:(?=\\.\\.\\.)|(?!\\.))' },
+        { include: 'source.ts#type' },                                          // official TS
+        { include: 'source.ts#type-inner' },                                    // Monogram TS
+        { name: 'punctuation.separator.comma.ts', match: ',' },
+        { name: 'keyword.operator.assignment.ts', match: '(=)(?!>)' },
+      ],
+    }],
     rawText: {
       tags: ['template', 'script', 'style'],
       token: 'RawText',

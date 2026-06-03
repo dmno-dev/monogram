@@ -2163,7 +2163,31 @@
                   "name": "source.ts",
                   "patterns": [
                     {
+                      "include": "source.ts#comment"
+                    },
+                    {
+                      "include": "source.ts#blockcomment"
+                    },
+                    {
+                      "include": "source.ts#linecomment"
+                    },
+                    {
+                      "name": "storage.modifier.ts",
+                      "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(extends|in|out)(?![_$[:alnum:]])(?:(?=\\.\\.\\.)|(?!\\.))"
+                    },
+                    {
+                      "include": "source.ts#type"
+                    },
+                    {
                       "include": "source.ts#type-inner"
+                    },
+                    {
+                      "name": "punctuation.separator.comma.ts",
+                      "match": ","
+                    },
+                    {
+                      "name": "keyword.operator.assignment.ts",
+                      "match": "(=)(?!>)"
                     }
                   ]
                 },
@@ -2185,7 +2209,31 @@
                   "name": "source.ts",
                   "patterns": [
                     {
+                      "include": "source.ts#comment"
+                    },
+                    {
+                      "include": "source.ts#blockcomment"
+                    },
+                    {
+                      "include": "source.ts#linecomment"
+                    },
+                    {
+                      "name": "storage.modifier.ts",
+                      "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(extends|in|out)(?![_$[:alnum:]])(?:(?=\\.\\.\\.)|(?!\\.))"
+                    },
+                    {
+                      "include": "source.ts#type"
+                    },
+                    {
                       "include": "source.ts#type-inner"
+                    },
+                    {
+                      "name": "punctuation.separator.comma.ts",
+                      "match": ","
+                    },
+                    {
+                      "name": "keyword.operator.assignment.ts",
+                      "match": "(=)(?!>)"
                     }
                   ]
                 },
@@ -2213,7 +2261,31 @@
               "contentName": "source.ts",
               "patterns": [
                 {
+                  "include": "source.ts#comment"
+                },
+                {
+                  "include": "source.ts#blockcomment"
+                },
+                {
+                  "include": "source.ts#linecomment"
+                },
+                {
+                  "name": "storage.modifier.ts",
+                  "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(extends|in|out)(?![_$[:alnum:]])(?:(?=\\.\\.\\.)|(?!\\.))"
+                },
+                {
+                  "include": "source.ts#type"
+                },
+                {
                   "include": "source.ts#type-inner"
+                },
+                {
+                  "name": "punctuation.separator.comma.ts",
+                  "match": ","
+                },
+                {
+                  "name": "keyword.operator.assignment.ts",
+                  "match": "(=)(?!>)"
                 }
               ]
             }

@@ -62,6 +62,17 @@ export const cases: Case[] = [
     checks: [{ at: 'n = 1', want: embedded, desc: 'the tsx script body embeds as code (the official leaves the whole body as plain HTML text)' },
       { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
 
+  // ── `generic="…">` type-param attribute — a DROP-IN compat gate (PR #6085). The value is a TS
+  //    type-PARAMETER list; the published Vue grammar embeds whichever source.ts the editor ships,
+  //    so the embed must tokenize under BOTH Monogram's source.ts (vue-issues here) AND VS Code's
+  //    OFFICIAL source.ts (vue-dropin) — hence checked through both harnesses. The value patterns
+  //    are hand-rolled with literal variance/`=` matches + type/comment includes that list both
+  //    hosts' keys (an unresolved `#include` no-ops), mirroring Volar's own grammar.
+  { id: 'generic="T"', title: '`generic="T extends U">` type-param list embeds as TS', src: `<script setup lang="ts" generic="T extends U">\nconst n = 1\n</script>${DONE}`,
+    checks: [{ at: 'extends', want: s => s.includes('storage.modifier'), desc: 'the variance modifier `extends` → storage.modifier — proves the type-param list is tokenized as TS (not a plain string), IDENTICALLY under Monogram\'s and the official\'s source.ts' },
+      { at: 'n = 1', want: embedded, desc: 'the script body still embeds as TS' },
+      { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
+
   // ── dynamic directive args + `.prop` shorthand — Monogram now splits the bracketed arg and
   //    embeds its expression (the official's arg shape, config-driven); both pass ──
   { id: '#4410', title: 'dynamic directive argument `:[attr]`', src: `<template>\n  <a :[attr]="url">x</a>${DONE}`,

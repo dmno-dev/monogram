@@ -47,6 +47,7 @@ const expect: Record<string, { mono: boolean; off: boolean }> = {
   '#5660': { mono: true, off: false }, '#4716/#5571': { mono: true, off: false }, '#4291': { mono: true, off: false },
   '#4410': { mono: true, off: true }, '#3727': { mono: true, off: true }, '#2666': { mono: true, off: true },
   '#2560/#1290': { mono: true, off: true },
+  'generic="T"': { mono: true, off: true },
 };
 
 let mPass = 0, oPass = 0; const rows: string[] = []; const deviations: string[] = [];
