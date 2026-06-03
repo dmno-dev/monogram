@@ -52,7 +52,10 @@ export default defineGrammar({
         // VS Code ships the same scope — so this ONE Vue grammar runs on Monogram's OR VS Code's
         // HTML interchangeably. (Was text.html.basic; the retarget is REQUIRED, not cosmetic:
         // the interpolation injection now fires on text.html.derivative, not basic.)
-        template: 'text.html.derivative',
+        // <template lang="pug"> embeds text.pug (delegated to the Pug grammar the editor provides,
+        // exactly as <style> delegates to source.css — Monogram needn't implement pug); a plain
+        // <template> keeps the embedded-HTML-fragment scope text.html.derivative.
+        template: { default: 'text.html.derivative', lang: { pug: 'text.pug' } },
         // <script lang="ts"> embeds Monogram's OWN proven TS grammar (more correct than VS Code's).
         script: { default: 'source.js', lang: { ts: 'source.ts', tsx: 'source.tsx', jsx: 'source.js.jsx' } },
         style: { default: 'source.css', lang: { scss: 'source.css.scss', less: 'source.css.less', stylus: 'source.stylus', postcss: 'source.postcss' } },

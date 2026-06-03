@@ -10,6 +10,12 @@
       "include": "#entities"
     },
     {
+      "include": "#raw-template-pug-inline"
+    },
+    {
+      "include": "#raw-template-pug"
+    },
+    {
       "include": "#raw-template-inline"
     },
     {
@@ -125,6 +131,74 @@
         }
       ]
     },
+    "raw-template-pug-inline": {
+      "name": "meta.template.vue",
+      "match": "(<)(template)\\b([^>]*\\blang\\s*=\\s*[\"']pug[\"'][^>]*)(>)(.*?)(</)(template)\\s*(>)",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.vue"
+        },
+        "2": {
+          "name": "entity.name.tag.vue"
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#attribute"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.vue"
+        },
+        "5": {
+          "name": "text.pug",
+          "patterns": [
+            {
+              "include": "text.pug"
+            }
+          ]
+        },
+        "6": {
+          "name": "punctuation.definition.tag.begin.vue"
+        },
+        "7": {
+          "name": "entity.name.tag.vue"
+        },
+        "8": {
+          "name": "punctuation.definition.tag.end.vue"
+        }
+      }
+    },
+    "raw-template-pug": {
+      "name": "meta.template.vue",
+      "begin": "(<)(template)\\b([^>]*\\blang\\s*=\\s*[\"']pug[\"'][^>]*)(>)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.vue"
+        },
+        "2": {
+          "name": "entity.name.tag.vue"
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#attribute"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.vue"
+        }
+      },
+      "while": "^(?!.*</template[\\s>])",
+      "contentName": "text.pug",
+      "patterns": [
+        {
+          "include": "text.pug"
+        }
+      ]
+    },
     "raw-template-inline": {
       "name": "meta.template.vue",
       "match": "(<)(template)\\b([^>]*)(>)(.*?)(</)(template)\\s*(>)",
@@ -219,8 +293,8 @@
       "patterns": [
         {
           "name": "meta.tag.vue",
-          "begin": "\\G",
-          "end": "(>)",
+          "begin": "\\G(?!\\blang\\s*=\\s*[\"']?(?:pug)\\b)",
+          "end": "(?=\\blang\\s*=\\s*[\"']?(?:pug)\\b)|(>)",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.tag.end.vue"
@@ -229,6 +303,46 @@
           "patterns": [
             {
               "include": "#attribute"
+            }
+          ]
+        },
+        {
+          "begin": "(?=\\blang\\s*=\\s*[\"']?pug\\b)",
+          "end": "(?=</template[\\s>])",
+          "patterns": [
+            {
+              "begin": "\\G",
+              "end": "(>)",
+              "endCaptures": {
+                "1": {
+                  "name": "punctuation.definition.tag.end.vue"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#attribute"
+                }
+              ]
+            },
+            {
+              "begin": "(?<=>)(?=[^\\n]*</template[\\s>])",
+              "end": "(?=</template[\\s>])",
+              "contentName": "text.pug",
+              "patterns": [
+                {
+                  "include": "text.pug"
+                }
+              ]
+            },
+            {
+              "begin": "(?<=>)",
+              "while": "^(?!.*</template[\\s>])",
+              "contentName": "text.pug",
+              "patterns": [
+                {
+                  "include": "text.pug"
+                }
+              ]
             }
           ]
         },
