@@ -55,8 +55,14 @@ export const cases: Case[] = [
     checks: [{ at: `| 'b'`, want: embedded, desc: 'the union tail before the same-line </script> still embeds as TS' },
       { at: '/script', want: isCloseTag, desc: 'the first </script> is clean tag punctuation, not leaked into source.ts' },
       { at: 'defineProps', want: embedded, desc: 'the second block recovers and embeds as TS (the official swallows it into the first block)' }] },
-  { id: '#3999', title: 'multi-line `<script>` start tag doesn\'t break the code after it', src: `<script\n  lang="ts"\n>\nconst x = 1\n</script>`,
-    checks: [{ at: 'const', want: embedded, desc: 'body still embeds as TS across the multi-line tag' }] },
+  // The force-wrapped (one-attr-per-line) start tag is #3999's actual trigger; the body is an
+  //   `interface`/`type` (TS-ONLY syntax) so the check pins the `ts` FAMILY, not merely "embedded".
+  //   A `want: embedded` here would still pass if the lang flipped source.ts→source.js (#3999's real
+  //   symptom), so we assert source.ts AND a TS-specific scope (`storage.type.interface.ts`) that a
+  //   source.js embed could never produce.
+  { id: '#3999', title: 'a force-wrapped multi-line `<script lang="ts">` start tag keeps the body as the `ts` family (no .ts→.js flip)', src: `<script\n  setup\n  lang="ts"\n>\ninterface I { x: number }\nconst x = 1\n</script>`,
+    checks: [{ at: 'interface', want: s => familyOf(s) === 'ts' && s.includes('storage.type.interface.ts'), desc: 'the `interface` keyword is TS-ONLY: it embeds as source.ts (`storage.type.interface.ts`) across the multi-line start tag — proving no source.ts→source.js family flip (#3999\'s symptom)' },
+      { at: 'const', want: s => familyOf(s) === 'ts', desc: 'the rest of the body is still the ts family, not js' }] },
   // ── tag / interpolation edge cases ──
   { id: '#4769', title: 'tag name starting with `template`', src: `<template>\n  <templatex>{{ y }}</templatex>${DONE}`,
     checks: [{ at: 'y', want: embedded, desc: 'interpolation inside a template-prefixed tag works' }, { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
@@ -74,9 +80,19 @@ export const cases: Case[] = [
     checks: [{ at: 'as', want: embedded, desc: '`as` embeds as TS' },
       { at: 'bar', want: embedded, desc: 'the NEXT directive value still embeds as TS — the cast can\'t eat the closing quote (the official mis-scopes `bar` as a plain attribute name)' },
       { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
-  // ── block-language attribute — Monogram embeds tsx as code, the official drops the embed ──
-  { id: '#4291', title: '`<script lang="tsx">` body is embedded code', src: `<script setup lang="tsx">\nconst n = 1\n</script>\n<template>\n  <p>x</p>${DONE}`,
-    checks: [{ at: 'n = 1', want: embedded, desc: 'the tsx script body embeds as code (the official leaves the whole body as plain HTML text)' },
+  // ── block-language attribute — EACH declared `script.lang` embeds its DECLARED scope (vue.ts:
+  //    tsx→source.tsx, jsx→source.js.jsx, ts→source.ts, default→source.js). We assert the SPECIFIC
+  //    scope, not just "some code" — a `want: embedded` here would pass even if tsx wrongly fell
+  //    back to source.js (the #4291 bug: Monogram emitted the per-lang `raw-script-tsx` region but
+  //    a harness that didn't register source.tsx silently dropped it → source.js). With the real
+  //    typescriptreact/javascriptreact grammars registered, Monogram embeds the declared scope; the
+  //    current Volar fixture does too (the historical gap was fixed upstream) → both pass, but the
+  //    derivation (from `script.lang` data) is the point: Monogram gets each dialect for free.
+  { id: '#4291', title: '`<script lang="tsx">` body embeds the DECLARED `source.tsx` (not a source.js fallback)', src: `<script setup lang="tsx">\nconst n = 1\n</script>\n<template>\n  <p>x</p>${DONE}`,
+    checks: [{ at: 'n = 1', want: s => s.includes('source.tsx'), desc: 'the tsx script body embeds as source.tsx — its DECLARED scope, not the default source.js fallback' },
+      { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
+  { id: '#4291-jsx', title: '`<script lang="jsx">` body embeds the DECLARED `source.js.jsx`', src: `<script setup lang="jsx">\nconst n = 1\n</script>\n<template>\n  <p>x</p>${DONE}`,
+    checks: [{ at: 'n = 1', want: s => s.includes('source.js.jsx'), desc: 'the jsx script body embeds as source.js.jsx — its DECLARED scope, not the default source.js' },
       { at: 'DONE', want: htmlText, desc: 'downstream recovers' }] },
 
   // ── `generic="…">` type-param attribute — a DROP-IN compat gate (PR #6085). The value is a TS

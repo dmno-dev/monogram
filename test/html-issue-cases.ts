@@ -28,10 +28,10 @@ export const cases: HtmlCase[] = [
     at: 'animateTransform', want: isTag },
   { id: 'tmbundle#122', title: '`<` inside a quoted attr value', src: '<a data-q="a < b">y</a>',
     at: 'b', want: isString },                                                // still inside the string, not a new tag
-  { id: 'tmbundle#115', title: '`>` inside a quoted attr value', src: '<button title="a > b">go</button>',
-    at: 'go', want: isText },                                                 // the `>` didn't close the tag early
-  { id: 'tmbundle#97', title: 'space before `>` in an end tag', src: '<section>x</section >',
-    at: 'section', nth: 1, want: isTag },                                     // the close tag name is still a tag
+  { id: 'vscode#130284', title: '`>` inside a quoted attr value does not close the tag early', src: '<button title="a > b">go</button>',
+    at: 'go', want: isText },                                                 // the `>` is inside the VALUE, so the start tag is not closed at it and `go` is the element's text (NOT swallowed). RELABELLED from tmbundle#115 — that earlier cite was wrong: textmate/html.tmbundle#115 is a FEATURE REQUEST to flag an end tag carrying attributes (`</div id="x">`) as invalid (which neither grammar does, and isn't a tokenization bug); this snippet actually exercises the `>`-in-attribute-value case = microsoft/vscode#130284
+  { id: 'tmbundle#97', title: 'whitespace (incl. a line feed) before `>` in a raw-text end tag', src: '<script src="d"></script\n><p>zz</p>',
+    at: 'zz', want: s => isText(s) && !isJs(s) },                             // HTML5 allows ws (incl. line feeds) before `>` in an end tag → parse5 CLOSES the <script> (it is empty) and `<p>zz</p>` is a sibling. The text `zz` must therefore be HTML text, NOT leaked into the embedded source.js (which is what Monogram did before the deferred-`>` close rules: `</script`→keyword.operator, `<p>zz<`→string.regexp.js). Both engines now close it (a former Monogram-only gap vs parse5)
   { id: 'tmbundle#108', title: 'nested `<svg>` is a valid tag, not flagged invalid', src: '<svg><svg></svg></svg>',
     at: 'svg', nth: 1, want: s => isTag(s) && !s.includes('invalid') },       // official's SVG-child whitelist marks a nested <svg> invalid.illegal; Monogram's generic nesting accepts it
 
@@ -94,6 +94,6 @@ export const cases: HtmlCase[] = [
     //   `source.js-ignored-vscode` leak on EVERY close `<`, the #65/#74 cases Monogram keeps clean.)
   { id: 'tmbundle#51', title: 'self-closing `/` is tag punctuation', src: '<img src="a.png" />',
     at: '/', want: isTagPunct },                                             // both scope the `/` of `/>` as punctuation.definition.tag (was plain text in old TextMate)
-  { id: 'tmbundle#82', title: '`<script type="application/json">` body is not parsed as HTML', src: '<script type="application/json">{"k":1}</script>',
-    at: 'k', want: s => !isTag(s) && !s.includes('invalid') && !s.includes('.error') }, // the JSON body broke HTML highlighting historically; now neither treats its `{...}` as markup — official drops it into source.unknown, Monogram tokenizes it via source.js (JSON ⊂ JS), and `</script>` still closes
+  { id: 'tmbundle#82', title: 'a `/>`-style `<script src=… />` does NOT self-close — its body is the script content', src: '<script src="x" /></head><body>hi</body>',
+    at: 'hi', want: s => isJs(s) && !isTag(s) },                              // `<script>` is a RAW-TEXT element: per HTML5 (and parse5, the oracle) a trailing `/>` is NOT self-closing, so parse5 keeps the script OPEN and everything after it — `</head><body>hi</body>` — is its TEXT CONTENT (parse5: <body> parses EMPTY, "hi" lives inside the script node). Monogram cascades that content into its embedded source.js BY CONSTRUCTION (parse5-faithful: `hi` is source.js, NOT an HTML tag). VS Code's grammar does the same here (it does not honour `/>` on a raw-text element either) → both engines are parse5-correct. This REPLACES an unrelated paired-`<script>…</script>` JSON proxy that never exercised the self-close at all.
 ];

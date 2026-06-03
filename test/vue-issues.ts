@@ -45,7 +45,15 @@ const expect: Record<string, { mono: boolean; off: boolean }> = {
   '#3999': { mono: true, off: true }, '#4769': { mono: true, off: true }, '#5701': { mono: true, off: true },
   '#6070': { mono: true, off: true },
   // ── 2026-06 expansion: more reported bugs, honest mix (incl. only-official Monogram gaps) ──
-  '#5660': { mono: true, off: false }, '#4716/#5571': { mono: true, off: false }, '#4291': { mono: true, off: false },
+  '#5660': { mono: true, off: false }, '#4716/#5571': { mono: true, off: false },
+  // #4291 (tsx) / #4291-jsx: graded with the REAL typescriptreact/javascriptreact grammars
+  // registered (the harness now does — see vue-grammar-harness.ts), so EACH `script.lang` resolves
+  // to its DECLARED scope. The current Volar fixture ALSO embeds source.tsx/source.js.jsx (the
+  // historical #4291 gap was fixed upstream), so both engines now hit the declared scope → both
+  // pass. Monogram derives this from `script.lang` data; the assertion pins the SPECIFIC scope
+  // (source.tsx / source.js.jsx), not a generic "embeds *some* code" (which a source.js fallback
+  // would have satisfied — the very bug).
+  '#4291': { mono: true, off: true }, '#4291-jsx': { mono: true, off: true },
   '#4410': { mono: true, off: true }, '#3727': { mono: true, off: true }, '#2666': { mono: true, off: true },
   '#2560/#1290': { mono: true, off: true },
   'generic="T"': { mono: true, off: true },

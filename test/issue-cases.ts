@@ -18,8 +18,11 @@ export const tests: TestCase[] = [
 
   // ── Angle bracket: typeof < comparison ──
   {
-    label: '#1050: typeof y < string is a relational operator not generic',
-    input: `x = typeof y < 'z';`,
+    // The reported repro carries the cascade VICTIM (`if (x) {} else {}`) the bug derails — the
+    // issue is that the bad `<`-as-type-param reading "breaks all syntax highlighting after it".
+    // Keep the victim so the test exercises the actual reported facet, not just the `<` in isolation.
+    label: '#1050: typeof y < string is a relational operator not generic (cascade victim intact)',
+    input: `x = typeof y < 'z'; if (x) {} else {}`,
     checks: [
       { text: 'typeof', scope: 'keyword.operator.expression' },
       { text: 'y', scope: 'variable.other' },
@@ -27,14 +30,23 @@ export const tests: TestCase[] = [
       // grammar scopes `< > <= >=` `keyword.operator.relational` (vs `comparison`
       // for `== != === !==`).
       { text: '<', scope: 'keyword.operator.relational' },
+      // the cascade victim after the `<` keeps its conditional keyword (not swallowed into a type)
+      { text: 'if', scope: 'keyword.control.conditional' },
+      { text: 'else', scope: 'keyword.control.conditional' },
     ],
   },
   {
-    label: '#978: typeof x < string then function',
-    input: `typeof x < '';`,
+    // #978's repro is `typeof x < ''; function f() {}` — the trailing `function f()` is the victim
+    // the bug breaks ("breaks all syntax highlighting after it"). The old input dropped it, so the
+    // label's "then function" was untested; keep the function so the cascade is actually checked.
+    label: '#978: typeof x < string then function (cascade victim intact)',
+    input: `typeof x < ''; function f() {}`,
     checks: [
       { text: 'typeof', scope: 'keyword.operator.expression' },
       { text: '<', scope: 'keyword.operator.relational' },
+      // the post-`<` function declaration survives (keyword + name correctly scoped)
+      { text: 'function', scope: 'storage.type.function' },
+      { text: 'f', scope: 'entity.name.function' },
     ],
   },
 
@@ -624,22 +636,29 @@ export const tests: TestCase[] = [
       { text: 'z', scope: 'entity.other.property' },
     ],
   },
+  // #995's real repro is the `d` FORM — a paren-wrapped object literal whose `(` and `{` are on
+  // SEPARATE lines: only THEN does the inner `as keyof typeof` mis-tokenize (the single-line `c`
+  // form works fine, so it does NOT exercise the bug). The old input here was a simple single-line
+  // paren cast (`(obj as keyof typeof X)`), a different construct — moved to multiLineTests below
+  // as the faithful multi-line `d`-form repro (Monogram keeps `as`/`keyof`/`typeof` keywords there).
+  //
+  // #994 is about a JSDoc `@template` DEFAULT — `@template [Output=Value]` inside a `/** */`
+  // comment — whose param name is "not colored". It is NOT about a generic-parameter default
+  // (`function f<T = string>`, which both grammars already color); the old case here tested that
+  // wrong construct, so its ✓ was honest about the wrong thing. The real repro is a genuine
+  // BOTH-MISS: Monogram leaves the whole `[Output=Value]` as one bare `meta.embedded.block.jsdoc`
+  // blob (the `Output` name unscoped) and the official does the same (`comment.block.documentation`),
+  // so neither colors `Output`. The check below asks for the DESIRED `Output → entity.name.type`
+  // (the template-param name) which BOTH miss — graded a both-miss in the README ledger — and
+  // `monoGap: true` keeps it out of the Monogram self-test (which gates only the known-good corpus).
   {
-    label: '#995: paren-wrapped `as keyof typeof` assertion tokenizes',
-    input: 'const k = (obj as keyof typeof X);',
+    label: '#994: JSDoc `@template [Output=Value]` default — the param name is uncolored (both miss)',
+    input: '/** @template [Output=Value] */',
+    monoGap: true,
     checks: [
-      { text: 'as', scope: 'keyword.operator.expression' },
-      { text: 'keyof', scope: 'keyword.operator.expression.keyof' },
-      { text: 'typeof', scope: 'keyword.operator.expression' },
-      { text: 'X', scope: 'variable.other' },
-    ],
-  },
-  {
-    label: '#994: default type-parameter value is colored',
-    input: 'function f<T = string>(): T {}',
-    checks: [
-      { text: 'T', scope: 'entity.name.type' },
-      { text: 'string', scope: 'support.type.primitive' },
+      // Desired-but-unmet: the template param `Output` should be a type name. Monogram and the
+      // official both leave it inside the bare JSDoc blob, so this fails for both (a both-miss).
+      { text: 'Output', scope: 'entity.name.type' },
     ],
   },
   {
@@ -798,21 +817,25 @@ export const multiLineTests: MultiLineTest[] = [
   },
 
   // ── Angle bracket: comparison at start of line ──
+  // #884's real repro declares `const x = 1;` first, so the `< x … >` run references a real
+  // binding (the issue's point: `< x >` is mis-read as a type spec). Keep the declaration.
   {
-    label: '#884: 0\\n< x\\n&& 1 > 0 is comparison',
+    label: '#884: const x=1; 0\\n< x\\n&& 1 > 0 is comparison (not a type spec)',
     lines: [
+      'const x = 1;',
       '0',
       '< x',
       '&& 1 > 0',
     ],
     checks: [
-      { line: 0, text: '0', scope: 'constant.numeric' },
-      { line: 1, text: '<', scope: 'keyword.operator' },
-      { line: 1, text: 'x', scope: 'variable.other' },
-      { line: 2, text: '&&', scope: 'keyword.operator.logical' },
-      { line: 2, text: '1', scope: 'constant.numeric' },
-      { line: 2, text: '>', scope: 'keyword.operator' },
-      { line: 2, text: '0', scope: 'constant.numeric' },
+      { line: 0, text: 'const', scope: 'storage.type' },
+      { line: 1, text: '0', scope: 'constant.numeric' },
+      { line: 2, text: '<', scope: 'keyword.operator' },
+      { line: 2, text: 'x', scope: 'variable.other' },
+      { line: 3, text: '&&', scope: 'keyword.operator.logical' },
+      { line: 3, text: '1', scope: 'constant.numeric' },
+      { line: 3, text: '>', scope: 'keyword.operator' },
+      { line: 3, text: '0', scope: 'constant.numeric' },
     ],
   },
   {
@@ -830,66 +853,87 @@ export const multiLineTests: MultiLineTest[] = [
   },
 
   // ── Angle bracket: multiline generic in class method doesn't break subsequent code ──
+  // #890's real repro wraps the `<\n a\n >{…}` in a `foo(bar, …)` call inside method `A`, and the
+  // reported victims are the string `"a string"` (not colored) and method `B`'s `return` (not
+  // colored). Keep that wrapper + both victims so the test exercises the actual cascade.
   {
-    label: '#890: multiline JSX/generic in class doesn\'t break method',
+    label: '#890: multiline JSX/generic in a `foo(bar, …)` call doesn\'t break the string or next method',
     lines: [
-      'class Foo {',
-      '  method1() {',
-      '    return <',
+      'class C {',
+      '  A() {',
+      '    return foo(bar, <',
       '      a',
-      '    >{ v: "a string" };',
+      '    >{ v: "a string" });',
       '  }',
-      '  method2() {',
-      '    return 1;',
+      '  B() {',
+      '    return 101;',
       '  }',
       '}',
     ],
     checks: [
-      { line: 1, text: 'method1', scope: 'entity.name.function' },
-      { line: 6, text: 'method2', scope: 'entity.name.function' },
-      { line: 7, text: 'return', scope: 'keyword.control' },
-      { line: 7, text: '1', scope: 'constant.numeric' },
+      { line: 1, text: 'A', scope: 'entity.name.function' },
+      { line: 2, text: 'foo', scope: 'entity.name.function' },
+      { line: 2, text: 'bar', scope: 'variable.other' },
+      { line: 4, text: 'a string', scope: 'string.quoted.double' },  // reported victim: "string is not colored"
+      { line: 6, text: 'B', scope: 'entity.name.function' },
+      { line: 7, text: 'return', scope: 'keyword.control' },         // reported victim: "return keyword is not colored"
+      { line: 7, text: '101', scope: 'constant.numeric' },
     ],
   },
 
   // ── Angle bracket: multiline new Map<> then broken method ──
+  // #973's real repro puts the split `new Map<\n T1, T2>([])` inside a `readonly bar = { map: … }`
+  // class field, with the victim being the following `private function()` method (its `return` is
+  // the reported casualty). Keep that wrapper + victim. NOTE: inside the `map: new Map<…>` field the
+  // constructor `Map` is a TYPE name (`entity.name.type`), not the `entity.name.function` it gets in
+  // the bare `new Map<…>` statement form — the richer context changes the (correct) scope.
   {
-    label: '#973: new Map<Type1, Type2>([]) doesn\'t break next method',
+    label: '#973: split `new Map<…>([])` in a `readonly bar` field doesn\'t break the next method',
     lines: [
-      'class Foo {',
-      '  method1() {',
-      '    new Map<',
+      'export class Foo {',
+      '  readonly bar = {',
+      '    map: new Map<',
       '      Type1, Type2>([])',
-      '  }',
-      '  method2() {',
+      '  };',
+      '  private function() {',
       '    return 1;',
       '  }',
       '}',
     ],
     checks: [
-      { line: 1, text: 'method1', scope: 'entity.name.function' },
+      { line: 1, text: 'readonly', scope: 'storage.modifier' },
       { line: 2, text: 'new', scope: 'keyword.operator.expression' },
-      { line: 2, text: 'Map', scope: 'entity.name.function' },
-      { line: 5, text: 'method2', scope: 'entity.name.function' },
-      { line: 6, text: 'return', scope: 'keyword.control' },
+      { line: 2, text: 'Map', scope: 'entity.name.type' },
+      { line: 3, text: 'Type1', scope: 'entity.name.type' },
+      { line: 5, text: 'function', scope: 'entity.name.function' },  // victim method name survives
+      { line: 6, text: 'return', scope: 'keyword.control' },         // reported victim: return not colored
+      { line: 6, text: '1', scope: 'constant.numeric' },
     ],
   },
 
   // ── Angle bracket: multiline type assertion ──
+  // #983's real repro destructures `const { id1, id2 } = <\n {…}\n >req.query;` and the reported
+  // victim is the following `if (id1) { throw new Error(…) }` block ("highlighting breaks after
+  // req.query"). Keep the binding + the real cascade victim (not a bare `if (true) {}` stand-in).
   {
-    label: '#983: multiline type assertion <{...}>expr then if works',
+    label: '#983: multiline `<{…}>req.query` type assertion then `if (id1){throw}` not broken',
     lines: [
-      '<',
+      'const { id1, id2 } = <',
       '  {',
       '    id1: string;',
+      '    id2: string;',
       '  }',
-      '>req.query',
-      'if (true) {}',
+      '>req.query;',
+      'if (id1) {',
+      `  throw new Error('syntax highlighting broke');`,
+      '}',
     ],
     checks: [
       { line: 2, text: 'string', scope: 'support.type.primitive' },
-      { line: 4, text: 'req', scope: 'variable.other' },
-      { line: 5, text: 'if', scope: 'keyword.control' },
+      { line: 3, text: 'string', scope: 'support.type.primitive' },
+      { line: 5, text: 'req', scope: 'variable.other' },
+      { line: 6, text: 'if', scope: 'keyword.control' },          // cascade victim: stays a control keyword
+      { line: 7, text: 'throw', scope: 'keyword.control' },       // victim body survives
     ],
   },
 
@@ -1433,6 +1477,29 @@ export const multiLineTests: MultiLineTest[] = [
     checks: [
       { line: 1, text: 'data', scope: 'variable.object.property' },  // member 1: official ✓, mono ✗
       { line: 2, text: 'data', scope: 'variable.object.property' },  // member 2: both ✗
+    ],
+  },
+
+  // #995's faithful `d`-form repro (moved here from the single-line cases, which only held the
+  // easy `c` form the issue says "works fine"). A paren-wrapped object literal whose `(` and `{`
+  // are on SEPARATE lines: the official then mis-tokenizes the inner `as keyof typeof` as
+  // `variable.parameter` (the reported bug). The derived grammar keeps them operator keywords —
+  // an only-Monogram win. (Not in the README single-line ledger, which grades only the `tests`
+  // array; it joins the multi-line only-Monogram cohort that the self-test verifies.)
+  {
+    label: '#995: paren-wrapped object-literal `as keyof typeof` (the `d`-form) stays operator keywords',
+    lines: [
+      'const a = { a: "", b: "" }',
+      'const d = (',
+      '    {',
+      '        key: a.a, label: a.b[a.a as keyof typeof a.b]',
+      '    })',
+    ],
+    checks: [
+      // the inner assertion operators on the object-literal property line — official: variable.parameter
+      { line: 3, text: 'as', scope: 'keyword.operator.expression' },
+      { line: 3, text: 'keyof', scope: 'keyword.operator.expression.keyof' },
+      { line: 3, text: 'typeof', scope: 'keyword.operator.expression' },
     ],
   },
 ];

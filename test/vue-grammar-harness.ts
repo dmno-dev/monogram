@@ -35,11 +35,18 @@ const stub = (sn: string) => {
 // text.html.derivative is Monogram's emitted thin alias of text.html.basic — the embedded-HTML
 // scope the template embeds and interpolation injects onto (both grammars get the same one, so
 // the official grammar, which targets text.html.derivative too, is tested faithfully).
+// source.tsx / source.js.jsx are Monogram's typescriptreact/javascriptreact grammars: BOTH Vue
+// grammars embed them for `<script lang="tsx">` / `lang="jsx">` (the official fixture references
+// source.tsx 8× and source.js.jsx 4×), so registering them is the faithful set — without them
+// vscode-textmate DROPS the `lang="tsx"`/`"jsx"` regions (their `include` is unresolved) and the
+// body falls through to the default source.js, masking the declared-scope embed (vuejs#4291).
 const embedded = [
   join(REPO, 'html.tmLanguage.json'),             // text.html.basic
   join(REPO, 'html-derivative.tmLanguage.json'),  // text.html.derivative
   join(REPO, 'typescript.tmLanguage.json'),       // source.ts
   join(REPO, 'javascript.tmLanguage.json'),       // source.js
+  join(REPO, 'typescriptreact.tmLanguage.json'),  // source.tsx       (<script lang="tsx">)
+  join(REPO, 'javascriptreact.tmLanguage.json'),  // source.js.jsx    (<script lang="jsx">)
   ...['source.css', 'source.css.scss', 'source.css.less', 'source.sass', 'source.stylus', 'source.postcss'].map(stub),
 ];
 // The official injectTo set (Volar's package.json) — the host grammars each injection loads into.

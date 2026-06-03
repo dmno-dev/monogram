@@ -6,14 +6,16 @@
 // not a separate hand-written grammar. The first cases are ones the hand-written official grammar
 // gets wrong: it breaks a generic-arrow type-param list with a default/const modifier to
 // `invalid.illegal` (the `<` is taken as a JSX tag), and lumps a member-expression tag name
-// into one component token. The derived grammar disambiguates both. (#1033 — a JSX component
-// with a generic type argument — the official already handles; Monogram now matches it.)
+// into one component token. The derived grammar disambiguates both. (#1033 is one of these — a
+// generic arrow `<T = string,>({…}: P<T>) => …` whose default the official mis-reads as a JSX tag,
+// cascading the `=>` to `invalid.illegal`; Monogram keeps it a function arrow — an only-Monogram win.)
 //
 // The ledger is HONEST, not cherry-picked. #825 — a `<` and the tag name split across lines —
 // defeats the official (a TextMate `begin` is single-line, so its tag-open can't span the break);
 // the derived grammar recovers it with a children-only multi-line tag-open (a lone `<` is an
-// unambiguous tag opener inside JSX children), so #825 is now an only-Monogram win. The rest the
-// derived grammar wins or ties: #794 / #754 / #585 / #667 / #624 / #1033 are both-pass — a non-null `!` then `/` division
+// unambiguous tag opener inside JSX children), so #825 is now an only-Monogram win. #1033 (the
+// generic arrow above) is likewise only-Monogram. The rest the derived grammar wins or ties:
+// #794 / #754 / #585 / #667 / #624 are both-pass — a non-null `!` then `/` division
 // keeps the `/>` closing the tag; a JSX element after a `/**/` block comment switches into JSX; a
 // `//` comment inside an open tag is scoped as a comment; real reported cascades both now handle.
 // Each of #794 / #754 / #585 was an only-official miss until the derived grammar caught up. #754 in
@@ -30,7 +32,6 @@ export interface Case { id: string; title: string; src: string; checks: Check[] 
 // tag, the whole tail (incl. `=>`) cascades to `invalid.illegal.attribute`, so this single
 // check cleanly separates "recognized as a generic arrow" from "broken".
 const arrow = (s: string) => s.includes('storage.type.function.arrow');
-const isType = (s: string) => s.includes('support.type') || s.includes('entity.name.type');
 const isVar = (s: string) => s.includes('variable.other');
 // A JSX tag name (intrinsic `entity.name.tag` or a `support.class.component`) — used to tell
 // "the `<…>` was recognized as a JSX tag" from "it was read as a `<` comparison / type-args".
@@ -51,9 +52,16 @@ export const cases: Case[] = [
   // ── member-expression JSX tag name (the official lumps it; Monogram resolves the reference) ──
   { id: '#627', title: 'member-expression JSX tag name', src: `const e = <comps.MyComp />;`,
     checks: [{ at: 'comps', want: isVar, desc: '`comps` is a variable reference, not lumped into the component name' }] },
-  // ── JSX component with a generic type argument (both get this right) ──
-  { id: '#1033', title: 'JSX component with a generic type argument', src: `const e = <Box<number> prop={1} />;`,
-    checks: [{ at: 'number', want: isType, desc: 'the `<number>` type argument is a type, not a broken attribute' }] },
+  // ── #1033: a generic ARROW FUNCTION with a default + destructured param (the #967/#979 family) ──
+  // The real #1033 is NOT "a JSX component with a generic type argument" (the old `src` here,
+  // `<Box<number> .../>`, which exercised a different construct both grammars handle). It is the
+  // arrow `<T = string,>({ genericProp }: FooProps<T>) => …` from the linked repro repo, whose
+  // type-param `<T = string,>` the official mis-reads as a JSX tag — cascading the `=>` (and `T`,
+  // `string`) to `invalid.illegal.attribute`, exactly the reported "error highlighting starts here".
+  // Monogram disambiguates it (the trailing-comma arrow carve-out): `=>` stays a function arrow.
+  // So this is an only-Monogram win, like its siblings #967/#979/#1042/#990 — not a both-pass.
+  { id: '#1033', title: 'generic arrow with a default + destructured param in `.tsx`', src: `export const Foo = <T = string,>({ genericProp }: FooProps<T>) => { return <div /> };`,
+    checks: [{ at: '=>', want: arrow, desc: 'the default-generic arrow is a function, not a broken JSX tag (official: invalid.illegal)' }] },
 
   // ── beyond the generic-arrow / member-tag wins above: cases that were once only-official misses
   //    (#794 / #585 / #754) and are now both-pass, plus the lone both-fail (#825). Each is a real
@@ -66,8 +74,14 @@ export const cases: Case[] = [
   // of a regex/relational run, mis-scoping the self-closing `/>` as a relational operator instead of
   // closing the tag; it now lexes `/` after a non-null `!` as division, so `/>` closes the tag — the
   // official keeps `/>` as the tag end too. tsc: JsxSelfClosingElement, 0 diagnostics.
-  { id: '#794', title: 'non-null `!` then `/` (division) in a JSX-attribute object', src: `const x = <Image style={{ r: image.width! / image.height! }} />;`,
-    checks: [{ at: '/>', want: isTagEnd, desc: 'the `/>` closes the tag — not a relational/regex operator from the `!` `/` run' }] },
+  // The real repro is `<Image source={image} style={{ aspectRatio: image.width! / image.height! }} />`
+  // — keep the leading `source={image}` attribute the old `src` dropped (and the issue's
+  // `aspectRatio` key), so the case exercises the actual reported element, not a trimmed one.
+  { id: '#794', title: 'non-null `!` then `/` (division) in a JSX-attribute object', src: `const x = <Image source={image} style={{ aspectRatio: image.width! / image.height! }} />;`,
+    checks: [
+      { at: 'source', want: (s) => s.includes('entity.other.attribute-name'), desc: 'the leading `source` attribute is recognized (not swallowed)' },
+      { at: '/>', want: isTagEnd, desc: 'the `/>` closes the tag — not a relational/regex operator from the `!` `/` run' },
+    ] },
 
   // #585 (both solve this now). A `//` line comment is legal inside the open tag, between
   // attributes. Monogram's open-tag attribute patterns now include the grammar's comment entries
