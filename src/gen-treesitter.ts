@@ -367,13 +367,15 @@ function buildTokenBody(name: string, ctx: GrammarJsContext): string | null {
  * run `tree-sitter generate`, read the "Add a conflict for these rules: …"
  * suggestion, add it, and repeat to a fixpoint.
  *
- * `test/collect-conflicts.ts` automates exactly that loop and prints this closure.
- * It is therefore DERIVED FROM THE GRAMMAR (by tree-sitter's own analysis of it),
- * keyed on snake rule names. Each tuple is applied DEFENSIVELY below — only when
- * every rule in it exists in the grammar — so the table is inert for any other
- * language and degrades to the purely-structural heuristics.
+ * `test/collect-conflicts.ts` automates exactly that loop across every derived grammar
+ * and prints the tuples to add here. The closure is therefore DERIVED FROM THE GRAMMAR
+ * (by tree-sitter's own analysis of it), keyed on snake rule names. Each tuple is applied
+ * DEFENSIVELY below — only when every rule in it exists in the grammar — so the table is
+ * inert for any other language and degrades to the purely-structural heuristics.
  *
- * Regenerate after a grammar change with:  node test/collect-conflicts.ts
+ * After a grammar change, run `node test/collect-conflicts.ts`, paste any printed tuples
+ * here, and re-run `npm run gen`. (CI only builds the typescript + html tree-sitters, so
+ * this is the only check that catches a new conflict in the tsx/js/jsx grammars.)
  */
 const LR_CONFLICT_CLOSURE: string[][] = [
   ['expr'], ['stmt'], ['stmt', 'decl'], ['expr', 'decl'], ['program', 'stmt'],
@@ -401,6 +403,11 @@ const LR_CONFLICT_CLOSURE: string[][] = [
   ['type_member', 'prop', 'member_name', 'binding_property'],
   ['type', 'type_member', 'interface_member'], ['type_member', 'param'],
   ['type', 'type_member', 'class_member'],
+  // class-expression heritage base (`extends class {}`) overlaps an object-type `{}`
+  // after `extends`/`implements`; the two jsx tuples are latent tsx/jsx gaps surfaced
+  // while completing the closure (CI builds only the typescript + html tree-sitters, so
+  // tsx/jsx generate was never exercised). Each is inert for languages lacking the rule.
+  ['type', 'class_heritage'], ['type_param', 'jsxtag_name'], ['expr', 'jsxcontainer'],
 ];
 
 /**

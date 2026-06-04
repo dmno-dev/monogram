@@ -53,6 +53,7 @@ module.exports = grammar({
     [$.prop, $.member_name],
     [$.prop, $.member_name, $.binding_property],
     [$.stmt, $.param],
+    [$.expr, $.jsxcontainer],
   ],
 
   rules: {

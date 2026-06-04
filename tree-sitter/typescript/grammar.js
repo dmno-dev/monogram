@@ -94,6 +94,7 @@ module.exports = grammar({
     [$.type, $.type_member, $.interface_member],
     [$.type_member, $.param],
     [$.type, $.type_member, $.class_member],
+    [$.type, $.class_heritage],
   ],
 
   rules: {
