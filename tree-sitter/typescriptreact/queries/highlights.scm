@@ -11,13 +11,11 @@
 
 ;; Declaration names (via the `name` field) → @function / @type.
 (expr name: (ident) @type)
-(expr name: (ident) @function)
 (decl name: (ident) @function)
 (decl name: (ident) @type)
 
 ;; Declaration names, keyword-anchored (disambiguates shared decl rules).
 (expr "class" (ident) @type)
-(expr "function" (ident) @function)
 (decl "function" (ident) @function)
 (decl "interface" (ident) @type)
 (decl "type" (ident) @type)

@@ -103,6 +103,8 @@ export interface DecoratorExprNode extends CstPos {
   children: Array<
     | (CstLeaf & { tokenType: '$punct' })
     | (CstLeaf & { tokenType: 'Decorator' })
+    | (CstLeaf & { tokenType: 'Ident' })
+    | (CstLeaf & { tokenType: 'PrivateField' })
     | ExprNode
     | TypeNode
   >;
@@ -205,11 +207,14 @@ export interface ClassHeritageNode extends CstPos {
   kind: 'node';
   rule: 'ClassHeritage';
   children: Array<
+    | (CstLeaf & { tokenType: '$keyword' })
     | (CstLeaf & { tokenType: '$punct' })
     | (CstLeaf & { tokenType: 'Ident' })
     | ClassHeritageNode
+    | ClassMemberNode
     | ExprNode
     | TypeNode
+    | TypeParamsNode
   >;
 }
 

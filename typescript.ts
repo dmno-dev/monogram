@@ -26,10 +26,19 @@ const TypeofRef = rule($ => [
 
 // ── Decorators ──
 
+// A decorator is `@ DecoratorMemberExpression`/`DecoratorCallExpression` (the `@name`
+// head already lexed by the Decorator token, dotted segments included). After the head,
+// these tail forms may follow and chain (`@x!.y`, `@x.y!`, `@x!()`): a call `(args)` /
+// typed call `<T>(args)`, a non-null `!`, and a member `.m`. ELEMENT access `[i]` is
+// deliberately EXCLUDED — TS's decorator grammar omits it precisely so a computed class
+// member after a decorator (`@dec ["m"]() {}`, `@dec [field] = 1`) is not swallowed as
+// `@dec[...]` (tsc rejects a real `@arr[0]` decorator). `many` so a whole chain is allowed.
 const DecoratorExpr = rule($ => [
-  [Decorator, opt(alt(
-    ['(', sep(Expr, ','), ')'],                          // @dec(args)
-    ['<', sep(Type, ','), '>', '(', sep(Expr, ','), ')'], // @dec<T>(args)
+  [Decorator, many(alt(
+    ['(', sep(Expr, ','), ')'],                          // call: (args)
+    ['<', sep(Type, ','), '>', '(', sep(Expr, ','), ')'], // typed call: <T>(args)
+    '!',                                                  // non-null assertion
+    ['.', alt(Ident, PrivateField)],                      // member access
   ))],
 ]);
 
@@ -119,6 +128,13 @@ const Prop = rule($ => {
 
 const ClassHeritage = rule($ => [
   Ident,
+  // The heritage clause is a LeftHandSideExpression, not just a dotted name: a
+  // parenthesized expression (`extends (B)`, `extends (cond ? A : B)`) and a class
+  // EXPRESSION (`extends class {}`, `extends class Q extends P {}`) are both valid
+  // bases. (Before, only `Ident` was a base, so `extends (B)` was rejected and
+  // `extends class {}` only "worked" by mis-reading `class` as the superclass name.)
+  ['(', Expr, ')'],
+  ['class', opt(notReserved, Ident), opt(TypeParams), opt('extends', $), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],
   [$, '.', Ident],
   [$, '<', sep(Type, ','), '>'],
   [$, '(', sep(Expr, ','), ')'],
@@ -175,7 +191,7 @@ const Expr = rule($ => [
     ['<', sep(Type, ','), '>', opt('(', sep($, ','), ')')],
     ['(', sep($, ','), ')'],
   ))],
-  ['new', 'class', Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}', opt('(', sep($, ','), ')')],
+  ['new', 'class', notReserved, Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}', opt('(', sep($, ','), ')')],
   ['new', 'class', opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}', opt('(', sep($, ','), ')')],
   ['[', many(opt($), ','), opt($), ']'],
   ['{', sep(Prop, ','), '}'],
@@ -187,11 +203,12 @@ const Expr = rule($ => [
   ['import', alt(['(', $, ')'], ['.', 'meta'])],
   PrivateField,
   HexNumber, OctalNumber, BinaryNumber, BigInt_,
-  [opt('async'), 'function', opt('*'), opt(Ident), opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), Block],
+  [opt('async'), 'function', opt('*'), opt(notReserved, Ident), opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), Block],
   // named vs anonymous kept separate (greedy opt(Ident) would eat a leading
-  // `extends`/`implements`); decorator dimension collapsed via opt(DecoratorExpr).
-  [opt(DecoratorExpr), 'class', Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],
-  [opt(DecoratorExpr), 'class', opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],
+  // `extends`/`implements`); decorator dimension is a `many` (a class expression may
+  // carry ≥2 decorators, `x = @d @d class C {}`, like the declaration arm below).
+  [many(DecoratorExpr), 'class', notReserved, Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],
+  [many(DecoratorExpr), 'class', opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],
   ['<', Type, '>', $],
 ]);
 
@@ -419,21 +436,25 @@ const Decl = rule($ => [
   // leading `function` is preferred as a declaration over an IIFE expression-
   // statement: Program tries Decl before Stmt, so `function f(){}\n()=>{}` parses
   // as a declaration + arrow rather than longest-matching `function f(){}()` (IIFE).
-  [opt('async'), 'function', opt('*'), Ident, opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), alt(Block, opt(';'))],
-  ['interface', Ident, opt(TypeParams), opt('extends', sep(Type, ',')), '{', many(InterfaceMember, opt(alt(';', ','))), '}'],
+  [opt('async'), 'function', opt('*'), notReserved, Ident, opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), alt(Block, opt(';'))],
+  // The declaration NAME slots below carry `notReserved` (same guard as the type-alias
+  // name): a reserved word is not a legal declaration name (`interface void {}`,
+  // `class while {}`, `enum for {}`, `namespace debugger {}` — all TS errors), while a
+  // contextual keyword name (`interface any`, `class string`, `enum number`) stays valid.
+  ['interface', notReserved, Ident, opt(TypeParams), opt('extends', sep(Type, ',')), '{', many(InterfaceMember, opt(alt(';', ','))), '}'],
   ['type', notReserved, Ident, opt(TypeParams), '=', Type, opt(';')],   // type-alias name can't be a reserved word (`type void = …`); contextual type keywords (`string`/`any`/…) stay valid
   // class decl: optional decorators + optional `abstract`. gen-tm expands the
   // opt()/many() to recover the `class Ident … { … }` shape for highlighting.
-  [many(DecoratorExpr), opt('abstract'), 'class', Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],
-  ['enum', Ident, '{', sep(EnumMember, ','), '}'],
-  ['declare', 'function', opt('*'), Ident, opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), opt(';')],
+  [many(DecoratorExpr), opt('abstract'), 'class', notReserved, Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],
+  ['enum', notReserved, Ident, '{', sep(EnumMember, ','), '}'],
+  ['declare', 'function', opt('*'), notReserved, Ident, opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), opt(';')],
   ['declare', alt($, Stmt)],
-  ['namespace', Ident, many('.', Ident), '{', many(Stmt), '}'],   // dotted name: `namespace A.B.C { … }`
-  ['module', alt([Ident, many('.', Ident)], String_), '{', many(Stmt), '}'],   // `module A.B.C { … }` | `module "x" { … }`
+  ['namespace', notReserved, Ident, many('.', Ident), '{', many(Stmt), '}'],   // dotted name: `namespace A.B.C { … }`
+  ['module', alt([notReserved, Ident, many('.', Ident)], String_), '{', many(Stmt), '}'],   // `module A.B.C { … }` | `module "x" { … }`
   ['export', alt($, Stmt)],
   ['export', 'default', alt(
-    [opt('async'), 'function', opt('*'), opt(Ident), opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), alt(Block, opt(';'))],  // function
-    ['abstract', 'class', Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],  // named abstract class
+    [opt('async'), 'function', opt('*'), opt(notReserved, Ident), opt(TypeParams), '(', sep(Param, ','), ')', opt(':', Type), alt(Block, opt(';'))],  // function
+    ['abstract', 'class', notReserved, Ident, opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],  // named abstract class
     ['abstract', 'class', opt(TypeParams), opt('extends', ClassHeritage), opt('implements', sep(Type, ',')), '{', many(ClassMember), '}'],          // anonymous abstract class
     [Expr, opt(';')],   // catch-all: export default <expr>
   )],
@@ -441,7 +462,7 @@ const Decl = rule($ => [
   ['export', '{', sep(ImportSpecifier, ','), '}', opt('from', String_), opt(';')],
   ['export', '=', Expr, opt(';')],
   ['export', 'type', '{', sep(ImportSpecifier, ','), '}', opt('from', String_), opt(';')],
-  ['const', 'enum', Ident, '{', sep(EnumMember, ','), '}'],
+  ['const', 'enum', notReserved, Ident, '{', sep(EnumMember, ','), '}'],
   ['import', alt(
     [ImportClause, 'from', String_, opt(';')],          // import X from "m"  (also `import type from "m"` = default named `type`)
     ['type', ImportClause, 'from', String_, opt(';')],  // import type X from "m"
