@@ -127,6 +127,30 @@ export const markup: MarkupConfig = {
   voidTags: ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
              'link', 'meta', 'param', 'source', 'track', 'wbr'],
   voidNameToken: 'VoidName',
+  // HTML's OPTIONAL (omittable) end tags. Each element maps to the sibling start tags that
+  // implicitly close it (the WHATWG "an end tag may be omitted if …" follow set); it also
+  // closes on any ancestor end tag (handled for free — content stops at every `</…>`). This
+  // is the context-free slice of HTML5 recovery a recursive-descent parser can express (a
+  // FOLLOW condition on the next token), unlike adoption-agency / foster-parenting (which
+  // need the imperative tree-construction stack and are out of scope). Pure DATA — the engine
+  // recognises the element arm structurally and stays tag-name-blind. Highlight-only
+  // generators ignore it (a flat per-tag grammar models no containment).
+  optionalEndTags: {
+    li: ['li'],
+    dt: ['dt', 'dd'],
+    dd: ['dt', 'dd'],
+    option: ['option', 'optgroup'],
+    optgroup: ['optgroup'],
+    p: ['p', 'address', 'article', 'aside', 'blockquote', 'details', 'div', 'dl', 'fieldset',
+        'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header',
+        'hgroup', 'hr', 'main', 'menu', 'nav', 'ol', 'pre', 'section', 'table', 'ul'],
+    tr: ['tr'],
+    td: ['td', 'th', 'tr'],
+    th: ['td', 'th', 'tr'],
+    thead: ['tbody', 'tfoot'],
+    tbody: ['thead', 'tbody', 'tfoot'],
+    tfoot: ['thead', 'tbody'],
+  },
 };
 
 export default defineGrammar({

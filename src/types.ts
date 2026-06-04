@@ -130,6 +130,19 @@ export interface MarkupConfig {
   // Keeps the generic parser name-blind: the void set is pure data, applied in the lexer.
   voidTags?: string[];
   voidNameToken?: string;
+  // Elements whose END tag is OPTIONAL (HTML's omittable end tags: `<li>` closes at the
+  // next `<li>`, `<p>` at the next block element, `<tr>`/`<td>` at the next row/cell, …).
+  // Each entry maps an element NAME → the set of sibling START-tag names that implicitly
+  // CLOSE it (the WHATWG "optional tag" follow set). Such an element's content `many(Node)`
+  // STOPS when the next start tag is one of these triggers, and its close tag is OPTIONAL
+  // (it may be omitted entirely — closed by a trigger sibling OR by any ancestor end tag,
+  // the latter handled for free because content already stops at any `</`). Pure DATA, so
+  // the engine stays name-blind: the parser recognises the container element arm STRUCTURALLY
+  // (from tagOpen/tagClose/closeMarker + the name token) and consults this map by the captured
+  // open-tag name. Highlight-only generators IGNORE it (a flat per-tag TM grammar does not
+  // model element containment, so the derived TextMate/Monarch/tree-sitter output is unchanged);
+  // it is purely a PARSER concern. ABSENT → every element requires an explicit close (B-lite).
+  optionalEndTags?: Record<string, string[]>;
   // Character entities in text (HTML: `&amp;`, `&#169;`, `&#xAB;`). When declared, a run
   // of text is no longer one opaque blob in the highlighter: an entity is lifted out and
   // scoped on its own (the official HTML grammar does the same — see textmate/html.tmbundle#81).

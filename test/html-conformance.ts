@@ -86,12 +86,18 @@ const corpus: string[] = [
   // source omits; the oracle now normalises that synthesised container away, so this is a
   // true source-structure match — not the "B-lite gap" it was previously misfiled as.
   '<table><tr><td>1</td></tr></table>',
+  // Optional (omittable) end tags — valid HTML now parsed (markup.optionalEndTags): an
+  // element closes implicitly at a trigger sibling start tag (or any ancestor end tag).
+  '<ul><li>a<li>b</ul>',
+  '<p>a<p>b<p>c',
+  '<dl><dt>a<dd>b<dt>c<dd>d</dl>',
+  '<select><option>a<option>b</select>',
+  '<p>x<div>y</div>',
 ];
 
 // Known B-lite gaps (documented, not gated): things parse5 handles via error-recovery
 // or full-document construction that a well-formed CFG doesn't.
 const unsupported: [string, string][] = [
-  ['optional close tags', '<ul><li>a<li>b</ul>'],
   ['DOCTYPE', '<!DOCTYPE html><html><body>x</body></html>'],
   ['unescaped < in text (needs &lt;)', '<p>a < b</p>'],
 ];

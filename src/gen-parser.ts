@@ -39,6 +39,61 @@ export function createParser(grammar: CstGrammar) {
   // The lexer is a separate stage, built from the same grammar (token defs + lexer hints).
   const { tokenize } = createLexer(grammar);
 
+  // ── Markup optional-end-tag support (HTML omittable end tags; see MarkupConfig.optionalEndTags) ──
+  // Pure DATA in the grammar's markup config drives a structural recognition here: the
+  // engine finds the CONTAINER element arm — `tagOpen Name many(…) tagClose many(content)
+  // tagOpen closeMarker Name tagClose` — by the markup delimiters + the name token, with NO
+  // hardcoded tag names. When that arm is matched and the captured open-tag name is an
+  // optional-end element, its content repetition STOPS at a trigger sibling start tag and its
+  // close tag becomes OPTIONAL. Absent markup / optionalEndTags → `markupContainer` stays null
+  // and parsing is byte-identical (the dedicated path is never taken).
+  const markup = grammar.markup;
+  // name → Set(lowercased trigger start-tags that implicitly close it).
+  const optionalEnd = new Map<string, Set<string>>();
+  if (markup?.optionalEndTags) {
+    for (const [name, triggers] of Object.entries(markup.optionalEndTags)) {
+      optionalEnd.set(name.toLowerCase(), new Set(triggers.map(t => t.toLowerCase())));
+    }
+  }
+  type MarkupContainer = {
+    arm: RuleExpr;          // the container alternative (a `seq`)
+    items: RuleExpr[];      // its sequence items
+    contentIdx: number;     // index of the `many(content)` quantifier
+    closeStart: number;     // index where the close tag begins (tagOpen of `</name>`)
+    nameTokens: Set<string>; // token name(s) that carry an element name (e.g. Name)
+  };
+  // Recognise the container arm structurally (only meaningful with markup + optionalEndTags).
+  function detectMarkupContainer(): MarkupContainer | null {
+    if (!markup || optionalEnd.size === 0) return null;
+    const open = markup.tagOpen, close = markup.tagClose, cm = markup.closeMarker;
+    if (!cm) return null;
+    const isLit = (e: RuleExpr | undefined, v: string) => !!e && e.type === 'literal' && e.value === v;
+    const isNameRef = (e: RuleExpr | undefined) =>
+      !!e && e.type === 'ref' && tokenNames.has(e.name);
+    for (const rule of grammar.rules) {
+      const alts = rule.body.type === 'alt' ? rule.body.items : [rule.body];
+      for (const alt of alts) {
+        const items = alt.type === 'seq' ? alt.items : [alt];
+        const n = items.length;
+        // Shape: open  Name  …  close  <content*>  open  closeMarker  Name  close
+        if (n < 6) continue;
+        if (!isLit(items[0], open) || !isNameRef(items[1])) continue;
+        if (!(isLit(items[n - 4], open) && isLit(items[n - 3], cm) && isNameRef(items[n - 2]) && isLit(items[n - 1], close))) continue;
+        // The content quantifier sits right before the close tag, after the open tag's `close`.
+        const contentIdx = n - 5;
+        const content = items[contentIdx];
+        if (!content || content.type !== 'quantifier' || content.kind !== '*') continue;
+        if (!isLit(items[contentIdx - 1], close)) continue;   // the open tag's `>` precedes content
+        const nameTokens = new Set<string>();
+        if (items[1].type === 'ref') nameTokens.add(items[1].name);
+        if (items[n - 2].type === 'ref') nameTokens.add(items[n - 2].name);
+        return { arm: alt, items, contentIdx, closeStart: n - 4, nameTokens };
+      }
+    }
+    return null;
+  }
+  const markupContainer = detectMarkupContainer();
+
   // Build precedence table
   const opTable = new Map<string, OpInfo>();
   const prefixOps = new Map<string, OpInfo>();
@@ -538,7 +593,13 @@ export function createParser(grammar: CstGrammar) {
       for (const alt of alts) {
         if (!canStart(firstOf.get(alt), startTok)) continue;
         pos = saved;
-        const children = matchExpr(alt);
+        // The markup container arm (HTML element with children) is matched by a
+        // dedicated path that honours optional end tags — content stops at a trigger
+        // sibling and the close tag may be omitted (see matchMarkupContainer). For all
+        // OTHER elements it reproduces the plain sequence match byte-for-byte.
+        const children = (markupContainer && alt === markupContainer.arm)
+          ? matchMarkupContainer()
+          : matchExpr(alt);
         if (children !== null && pos > bestPos) {
           const startOff = children.length > 0 ? childOffset(children[0]) : offset();
           const endOff = children.length > 0 ? childEnd(children[children.length - 1]) : offset();
@@ -824,6 +885,85 @@ export function createParser(grammar: CstGrammar) {
         children.push(...result);
       }
       return children;
+    }
+
+    // The markup container arm (`<tag …> content </tag>`), honouring optional end tags.
+    // Identical to a plain matchSeq for ordinary elements; for an OPTIONAL-END element
+    // (its open-tag name is a key in `optionalEnd`) the content stops at a trigger sibling
+    // start tag and the close tag may be omitted. Reproduces the exact flat child list the
+    // generic match would (open punctuation + name + attrs + content nodes + close), so the
+    // CST — and every test that walks it — is unchanged for already-supported input.
+    function matchMarkupContainer(): CstChild[] | null {
+      const c = markupContainer!;
+      const saved = pos;
+      const children: CstChild[] = [];
+
+      // Open tag: items[0 .. contentIdx-1]  (tagOpen, Name, many(Attr), …, tagClose).
+      let openName = '';
+      for (let i = 0; i < c.contentIdx; i++) {
+        const item = c.items[i];
+        if (item.type === 'op' || item.type === 'prefix' || item.type === 'postfix') continue;
+        const result = matchExpr(item);
+        if (result === null) { pos = saved; return null; }
+        // The open-tag name leaf (a name token) — drives the optional-end lookup.
+        if (item.type === 'ref' && c.nameTokens.has(item.name) && result[0]?.kind === 'leaf') {
+          openName = result[0].text;
+        }
+        children.push(...result);
+      }
+
+      const triggers = optionalEnd.get(openName.toLowerCase());
+
+      // Content: a `*` over the content rule. For an optional-end element, stop the
+      // repetition when the next start tag is a trigger sibling (it belongs to the
+      // PARENT's content, which resumes once this element closes implicitly). Content
+      // already stops at any `</…>` (the content rule can't begin with closeMarker), so
+      // an ancestor end tag closes the element too — no extra check needed.
+      const contentBody = (c.items[c.contentIdx] as { body: RuleExpr }).body;
+      while (true) {
+        if (triggers && atTriggerStartTag(triggers)) break;
+        const before = pos;
+        const result = matchExpr(contentBody);
+        if (result === null) { pos = before; break; }
+        if (result.length === 0 && pos === before) break;
+        children.push(...result);
+      }
+
+      // Close tag: items[closeStart .. end]  (tagOpen, closeMarker, Name, tagClose). Match
+      // the whole sequence, but only ACCEPT it when the close-tag name equals the open-tag
+      // name (case-insensitive — HTML tag names are ASCII-case-insensitive). A mismatched
+      // close belongs to an ANCESTOR, so an optional-end element must not greedily consume it
+      // (`<ul><li>a</ul>`: the li must leave `</ul>` for the ul). Name equality is the HTML
+      // well-formed invariant, so this never rejects valid already-supported input.
+      const beforeClose = pos;
+      const close = matchSeq(c.items.slice(c.closeStart));
+      if (close !== null) {
+        const closeName = close.find((ch, i) => i > 0 && ch.kind === 'leaf' && c.nameTokens.has((ch as CstLeaf).tokenType)) as CstLeaf | undefined;
+        if (!closeName || closeName.text.toLowerCase() === openName.toLowerCase()) {
+          children.push(...close);
+          return children;
+        }
+        pos = beforeClose;   // mismatched close → not ours; fall through
+      }
+      // No (matching) close tag here. Allowed only for an optional-end element (it was closed
+      // by a trigger sibling or an ancestor end tag); a normal element still REQUIRES its close.
+      pos = beforeClose;
+      if (triggers) return children;
+      pos = saved;
+      return null;
+    }
+
+    // Is the lookahead a start tag `tagOpen Name…` whose name is in `triggers`? (Used to
+    // stop an optional-end element's content at a sibling that implicitly closes it.) A
+    // close tag (`tagOpen closeMarker …`) is NOT a trigger — content stops at it anyway.
+    function atTriggerStartTag(triggers: Set<string>): boolean {
+      const t0 = tokens[pos];
+      if (!t0 || t0.type !== '' || t0.text !== markup!.tagOpen) return false;
+      const t1 = tokens[pos + 1];
+      if (!t1) return false;
+      if (markup!.closeMarker && t1.type === '' && t1.text === markup!.closeMarker) return false;
+      if (!markupContainer!.nameTokens.has(t1.type)) return false;   // not a name token
+      return triggers.has(t1.text.toLowerCase());
     }
 
     // Mixfix operand re-bound (see ledMixfix). The LED shape is
