@@ -12,16 +12,20 @@ Write a language's grammar **once**, as an executable definition. Monogram runs 
 - **Vue** ([`vue.ts`](vue.ts)) — a dialect of `html.ts`: SFC blocks that embed Monogram's own TS/JS/CSS, plus directives and `{{ }}` interpolation.
 
 <!-- coverage:start -->
-Per-grammar alignment vs the **official parser** as the neutral oracle (`node test/coverage-table.ts --write`). *Parser* = Monogram's parser vs the official parser: `branch` = source-coverage-anchored branch alignment, `agree` = bidirectional accept/reject (tree-equality for structural oracles) — `test/src-coverage.ts`. *Highlighter* = Monogram's derived TextMate grammar vs the official one, both graded against the parser's token roles — `test/scope-gap.ts`, the [vscode#203212](https://github.com/microsoft/vscode/issues/203212) comparison.
+Per-grammar comparison vs the **official parser** as the neutral oracle (`node test/coverage-table.ts --write`).
 
-| Grammar | Parser (branch · agree) | Highlighter — Monogram vs official |
+**Parser** — Monogram's parser vs the official parser (`test/src-coverage.ts`). **agree** is the closeness number: Monogram and the official parser return the same verdict on each corpus file (both accept / both reject; **structural parse-tree equality** for HTML via parse5). **covered** is the share of the official parser's branches the corpus actually exercises — a blind-spot gauge; Monogram's behaviour on the uncovered remainder is untested, so read `agree` as "on the `covered` portion." For the non-HTML grammars `agree` is accept/reject, *not* tree-equality; their parse-**structure** correctness is exercised instead by the **Highlighter** axis below, whose token roles are read off the parse tree. (Each adapter's detailed output also prints a coverage-weighted branch-alignment %, which is more lenient than `agree`.)
+
+**Highlighter** — Monogram's derived TextMate grammar vs the official one, both graded against the parser's token roles (`test/scope-gap.ts`); the [vscode#203212](https://github.com/microsoft/vscode/issues/203212) comparison.
+
+| Grammar | Parser — agree · covered | Highlighter — Monogram vs official |
 |---|---|---|
-| TypeScript | 97.7% · 97.1% | 99.5% vs 99.0% |
-| JavaScript | 97.3% · 92.2% | 88.9% vs 83.6% |
-| JSX | 100.0% · 97.1% | 94.6% vs 92.9% |
-| TSX | 99.4% · 96.7% | 95.3% vs 95.1% |
-| HTML | 84.3% · 77.9% | 100.0% vs 97.6% |
-| YAML | 83.0% · 63.1% | 91.8% vs 89.7% |
+| TypeScript | 97.1% · 76.4% | 99.5% vs 99.0% |
+| JavaScript | 92.2% · 65.5% | 88.9% vs 83.6% |
+| JSX | 97.1% · 52.5% | 94.6% vs 92.9% |
+| TSX | 96.7% · 65.7% | 95.3% vs 95.1% |
+| HTML | 77.9% · 48.1% | 100.0% vs 97.6% |
+| YAML | 63.1% · 73.9% | 91.8% vs 89.7% |
 | Vue | — | 98.8% vs 98.0% |
 <!-- coverage:end -->
 
