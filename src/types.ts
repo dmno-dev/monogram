@@ -256,7 +256,18 @@ export interface IndentConfig {
   // Block scalars (YAML `|` / `>`): when the rest of a line is an introducer + indicators, the
   // following more-indented lines are verbatim content emitted as ONE token (like raw-text, but
   // bounded by indentation rather than a close tag). `introducers` are the leading chars (['|','>']).
-  blockScalar?: { introducers: string[]; token: string };
+  // `documentMarkers` (e.g. ['---','...']) are col-0 strings that ALWAYS terminate a block scalar
+  // (a doc boundary outranks indentation) and, when one heads the introducer's line (`--- >`),
+  // mark it a document-ROOT scalar whose content may sit at column 0 (auto-detected, parent = -1).
+  blockScalar?: { introducers: string[]; token: string; documentMarkers?: string[] };
+  // Compact-notation indicators (YAML `-` / `?`): a block entry indicator whose nested node begins
+  // INLINE on the same line (`- item: a`, `? - x`). The node's true indentation is then the column
+  // of its first char AFTER the indicator, not the indicator's own column — so a following SIBLING
+  // line aligned with that content (`- item: a` / `  quantity: b`) is a sibling, not a child. When
+  // the FIRST such indicator on a line is followed by inline block-structural content, the lexer
+  // pushes that content column (emitting one INDENT after the indicator) so the compact form yields
+  // the same INDENT/NEWLINE/DEDENT shape as the equivalent next-line-indented form. Absent → off.
+  compactIndicators?: string[];
 }
 
 export interface PrecOperator {

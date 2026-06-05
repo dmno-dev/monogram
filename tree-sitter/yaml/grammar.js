@@ -43,7 +43,7 @@ module.exports = grammar({
 
     value: $ => choice(seq($.indent, choice($.num, $.bool_null, $.plain), repeat1(seq($.newline, $.plain)), $.dedent), seq($.indent, $.node, $.dedent), $.seq_value_node),
 
-    map_value: $ => choice(seq($.indent, choice($.num, $.bool_null, $.plain), repeat1(seq($.newline, $.plain)), $.dedent), seq($.indent, $.node, $.dedent), $.map_value_node),
+    map_value: $ => choice(seq($.indent, choice($.num, $.bool_null, $.plain), repeat1(seq($.newline, $.plain)), $.dedent), seq($.indent, $.node, $.dedent), seq($.indent, $.property, $.dedent, $.newline, $.block_sequence), seq($.property, $.newline, $.block_sequence), seq($.newline, $.block_sequence), $.map_value_node),
 
     indented_value_node: $ => choice(seq($.property, choice(seq($.indent, $.indented_value_node, $.dedent), $.collection_content)), $.content_node),
 

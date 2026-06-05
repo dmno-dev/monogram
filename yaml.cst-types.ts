@@ -221,8 +221,10 @@ export interface MapValueNode extends CstPos {
     | (CstLeaf & { tokenType: 'Newline' })
     | (CstLeaf & { tokenType: 'Num' })
     | (CstLeaf & { tokenType: 'Plain' })
+    | BlockSequenceNode
     | MapValueNodeNode
     | NodeNode
+    | PropertyNode
   >;
 }
 

@@ -291,7 +291,20 @@ const Value = rule(() => [foldedPlainBlock(), [Indent, Node, Dedent], SeqValueNo
 // sequence — YAML forbids `key: - a` on one line (a block seq must begin on the next line). A
 // property here may be followed by an INDENTED block (`a: !!seq\n  - x`) or be EMPTY (`a: &x\nb: c`
 // → value null, `b` a sibling); a same-column line is the sibling, never the value.
-const MapValue = rule(() => [foldedPlainBlock(), [Indent, Node, Dedent], MapValueNode]);
+//
+// EXCEPTION: a block SEQUENCE may sit at the SAME column as its parent key and still be that key's
+// value (`key:\n- a\n- b`; YAML's one structural same-column allowance — a mapping/scalar value
+// MUST instead indent, but a `-`-led sequence need not). The `[Newline, BlockSequence]` branch is
+// reachable only when the inline value was empty (an inline value emits its token before the
+// Newline, so this branch's leading Newline can't match), so `key: v\n- a` stays a reject.
+// yaml-test-suite AZ63 / RLU9 / 7ZZ5. The `[Indent, Property, Dedent, Newline, BlockSequence]`
+// branch is the same allowance when the value carries a property on its own (more-indented) line
+// and the sequence then dedents to the parent column (`seq:\n &anchor\n- a`; SKE5) — the property
+// must indent (a col-0 `&a` is a reject), but its sequence content may share the key's column. The
+// `[Property, Newline, BlockSequence]` branch is the INLINE-property form (`sequence: !!seq\n- a`;
+// 57H4) — the property sits on the key's line, the sequence at the key's column. All three require
+// a `-`-led sequence; a same-column scalar/mapping still goes through the sibling path.
+const MapValue = rule(() => [foldedPlainBlock(), [Indent, Node, Dedent], [Indent, Property, Dedent, Newline, BlockSequence], [Property, Newline, BlockSequence], [Newline, BlockSequence], MapValueNode]);
 // The content of an INDENTED value block (after `key: &prop\n  …` or `key:\n  …`): like Node,
 // but a node that carries a property AND is the content of an already-property-led value must
 // wrap a COLLECTION, never a bare scalar — `a: &x\n  &y scalar` stacks two anchors on one node
@@ -438,7 +451,8 @@ const indent: IndentConfig = {
   flowOpen: ['[', '{'],
   flowClose: [']', '}'],
   comment: '#',
-  blockScalar: { introducers: ['|', '>'], token: 'BlockScalar' },
+  blockScalar: { introducers: ['|', '>'], token: 'BlockScalar', documentMarkers: ['---', '...'] },
+  compactIndicators: ['-', '?'],
 };
 
 export default defineGrammar({

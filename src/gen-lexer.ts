@@ -168,6 +168,20 @@ export function createLexer(grammar: CstGrammar) {
   // preceding space, so a glued `#` fails the signature and the `>`/`|` is not taken as a header.
   const blockScalarSig = /^[|>](?:[1-9][+-]?|[+-][1-9]?|[+-]|)[ \t]*(?:(?<=[ \t])#[^\n]*)?(?:\r?\n|$)/;
   if (indent?.blockScalar) indentTokenNames.add(indent.blockScalar.token);
+  // Col-0 strings (`---`/`...`) that always end a block scalar — a document boundary outranks
+  // indentation — and, when one heads the introducer's line, mark a document-ROOT scalar.
+  const blockScalarDocMarkers = indent?.blockScalar?.documentMarkers ?? [];
+  // A marker only counts at a line edge: it must be followed by whitespace / EOL (so `---`/`...`
+  // terminate, but `----`/`...x` do not — those are ordinary content).
+  const markerAt = (src: string, i: number): boolean =>
+    blockScalarDocMarkers.some((m) => {
+      if (!src.startsWith(m, i)) return false;
+      const a = src[i + m.length];
+      return a === undefined || a === ' ' || a === '\t' || a === '\n' || a === '\r';
+    });
+  // Compact-notation entry indicators (`-`/`?`) whose inline content's column is the real
+  // indentation of the nested node (see IndentConfig.compactIndicators).
+  const compactIndicatorSet = new Set(indent?.compactIndicators ?? []);
   // Does the line content starting at `start` begin a BLOCK-STRUCTURAL node — one whose leading
   // whitespace serves as its indentation (so a tab there is a §6.1 error)? True for a `-`/`?`
   // indicator, an empty-`:` key, a node property (`&`/`!`), or a plain/quoted scalar that is a
@@ -197,6 +211,26 @@ export function createLexer(grammar: CstGrammar) {
       if (ch === ':') { const n = src[i + 1]; if (n === undefined || n === ' ' || n === '\t' || n === '\n' || n === '\r' || n === ',' || n === '[' || n === ']' || n === '{' || n === '}') return true; }
     }
     return false;
+  }
+  // For a compact entry indicator (`- `/`? `): does its INLINE content begin a nested block
+  // COLLECTION whose own indentation is this content's column — a `-`/`?` indicator, or a mapping
+  // key (a scalar with an inline `:`)? It looks THROUGH a leading property prefix (`- &a key: v`,
+  // `- !!seq key: v`), but a property that stands ALONE on the line (`- !!seq`, with the collection
+  // on a separately-indented next line) does NOT nest here — the property is just a prefix, so we
+  // must not push its column. (Distinct from startsBlockStructuralNode, which accepts a bare
+  // property because for the §6.1 tab check a property always establishes a node.)
+  function compactNestsHere(src: string, start: number): boolean {
+    let i = start;
+    // Skip an optional node-property prefix (one or two of `&anchor` / `!tag`, space-separated).
+    for (let n = 0; n < 2; n++) {
+      if (src[i] === '&' || src[i] === '!') {
+        i++; while (i < src.length && !sepAfter(src[i]) && src[i] !== ',') i++;
+        while (i < src.length && (src[i] === ' ' || src[i] === '\t')) i++;
+      } else break;
+    }
+    if (i >= src.length || src[i] === '\n' || src[i] === '\r') return false;   // property alone on the line → no nest
+    if ((src[i] === '-' || src[i] === '?') && sepAfter(src[i + 1])) return true; // nested indicator
+    return startsBlockStructuralNode(src, i, false);                            // a mapping key (the `:`-sniff)
   }
 
   // Scan from inside a template span to its next boundary: an interpolation hole
@@ -269,13 +303,17 @@ export function createLexer(grammar: CstGrammar) {
     let lineStart = !!indent;        // at a block-context line boundary (file start counts as one)
     let emittedContent = false;      // any real (non-structural) token emitted yet — suppress a leading NEWLINE/DEDENT
     let currentLineCol = 0;          // leading-space column of the current logical line (bounds block scalars)
+    let atLineLead = false;          // the next emitted token is the FIRST content token of its line (compact-indicator probe)
     const indentStack: number[] = [0];
     function push(t: Token): void {
       if (pendingNl) { t.newlineBefore = true; pendingNl = false; }
       if (pendingComment) { t.commentBefore = true; pendingComment = false; }
       tokens.push(t);
       if (indent) {
-        if (!indentTokenNames.has(t.type)) emittedContent = true;   // a real token (not INDENT/DEDENT/NEWLINE)
+        if (!indentTokenNames.has(t.type)) {
+          emittedContent = true;                                     // a real token (not INDENT/DEDENT/NEWLINE)
+          atLineLead = false;                                        // line-lead consumed once a real token lands
+        }
         if (t.type === '') {                                         // track flow depth on punctuation literals
           if (flowOpenSet.has(t.text)) flowDepth++;
           else if (flowCloseSet.has(t.text)) flowDepth = Math.max(0, flowDepth - 1);
@@ -386,6 +424,7 @@ export function createLexer(grammar: CstGrammar) {
           }
         }
         lineStart = false;
+        atLineLead = true;          // the next real token is this line's first — eligible for a compact-indicator push
         continue;
       }
 
@@ -425,11 +464,21 @@ export function createLexer(grammar: CstGrammar) {
       }
 
       // ── Block scalar (YAML | / >): from the introducer line, take all following lines more
-      // indented than the current line's column as ONE verbatim token (blank lines included). ──
+      // indented than the PARENT node as ONE verbatim token (blank lines included). The content
+      // indentation auto-detects from the first non-empty body line; for a document-root scalar the
+      // parent indentation is -1, so that first line (and the whole body) may sit at column 0. ──
       if (indent?.blockScalar && flowDepth === 0 && blockScalarIntro.has(source[pos]) && blockScalarSig.test(source.slice(pos))) {
         const startPos = pos;
+        // The header line's text before the introducer decides the parent indentation. If the line
+        // begins with a document marker (`--- >`) or with the introducer itself (a bare top-level
+        // `>`/`|` at col 0), this is the document's ROOT node → parent = -1 (col-0 body allowed).
+        // Otherwise something precedes it on the line (a `key:` / `-`) at currentLineCol → parent =
+        // currentLineCol (so body must be MORE indented than the key/indicator, as before).
+        let lineBegin = startPos; while (lineBegin > 0 && source[lineBegin - 1] !== '\n') lineBegin--;
+        const before = source.slice(lineBegin, startPos).replace(/^[ \t]+/, '');   // line content before the introducer
+        const atRoot = currentLineCol === 0 && (before === '' || blockScalarDocMarkers.some((m) => before === m + ' ' || before.startsWith(m + ' ')));
+        const parent = atRoot ? -1 : currentLineCol;
         let p = pos; while (p < source.length && source[p] !== '\n') p++; if (p < source.length) p++;  // skip the header line
-        const parent = currentLineCol;
         while (p < source.length) {
           let q = p, c = 0;
           while (q < source.length && source[q] === ' ') { q++; c++; }
@@ -438,6 +487,7 @@ export function createLexer(grammar: CstGrammar) {
             p = q + 1; if (source[q] === '\r' && source[p] === '\n') p++;
             continue;
           }
+          if (c === 0 && markerAt(source, q)) break;                       // a col-0 `---`/`...` ends the scalar
           if (c > parent) { let e = q; while (e < source.length && source[e] !== '\n') e++; p = e < source.length ? e + 1 : e; }
           else break;                                                     // dedent → the block scalar ends
         }
@@ -581,8 +631,32 @@ export function createLexer(grammar: CstGrammar) {
             // iff it follows a value (computed BEFORE pushing it, so prev is the token
             // before it). Chains correctly (`a!!`): each `!` reads the prior one's flag.
             if (postfixAfterValueTexts.has(lit)) lastBangWasPostfix = prevIsValue(tokens[tokens.length - 1]);
+            // COMPACT NOTATION (YAML): when this `-`/`?` indicator is the FIRST token of its line
+            // and its nested node begins INLINE with block-structural content (a `key:` mapping or a
+            // further `-`/`?` indicator), the node's real indentation is that content's column, not
+            // the indicator's. Push that column and emit an INDENT right after the indicator so the
+            // compact line yields the same shape as the next-line-indented form (a following sibling
+            // line aligned with the content then DEDENTs/NEWLINEs correctly). A leaf scalar after the
+            // indicator (`- a`) is NOT structural → no push (so simple sequences are unchanged).
+            const wasLineLead = atLineLead;
             push({ type: '', text: lit, offset: pos });
             pos += lit.length;
+            if (indent && flowDepth === 0 && wasLineLead && compactIndicatorSet.has(lit)) {
+              // Only SPACES separate the indicator from its inline content: a TAB there is the
+              // nested node's indentation, which §6.1 forbids — so leave it for the whitespace
+              // branch's tab check to reject (`-\t-`, `?\tkey:`) rather than nesting it.
+              let q = pos; while (q < source.length && source[q] === ' ') q++;
+              const contentCol = currentLineCol + (q - (pos - lit.length));
+              const c = source[q];
+              if (q > pos && c !== undefined && c !== '\n' && c !== '\r'
+                  && !(indent.comment && source.startsWith(indent.comment, q))
+                  && contentCol > indentStack[indentStack.length - 1]
+                  && compactNestsHere(source, q)) {
+                indentStack.push(contentCol);
+                push({ type: indent.indentToken, text: '', offset: q });
+                atLineLead = true;     // the inline content is itself a fresh line-lead (so `? - x` nests once more if `- x` is structural)
+              }
+            }
             matched = true;
             break;
           }
