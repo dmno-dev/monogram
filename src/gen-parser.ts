@@ -85,8 +85,11 @@ export function createParser(grammar: CstGrammar) {
         if (!content || content.type !== 'quantifier' || content.kind !== '*') continue;
         if (!isLit(items[contentIdx - 1], close)) continue;   // the open tag's `>` precedes content
         const nameTokens = new Set<string>();
-        if (items[1].type === 'ref') nameTokens.add(items[1].name);
-        if (items[n - 2].type === 'ref') nameTokens.add(items[n - 2].name);
+        // Hoist to locals: TS narrows a plain const via `.type === 'ref'`, but not a
+        // computed element access (`items[n-2]`) re-read after the guard.
+        const openNameItem = items[1], closeNameItem = items[n - 2];
+        if (openNameItem.type === 'ref') nameTokens.add(openNameItem.name);
+        if (closeNameItem.type === 'ref') nameTokens.add(closeNameItem.name);
         return { arm: alt, items, contentIdx, closeStart: n - 4, nameTokens };
       }
     }
