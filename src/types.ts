@@ -236,7 +236,7 @@ export interface MarkupInject {
     scopeName: string;        // emitted file's scopeName, e.g. vue.directives
     repoKey: string;          // main-grammar repository key the stub includes, e.g. vue-directives
     selector: InjectClause[]; // host scopes (e.g. meta.tag / meta.element)
-    control: { match: string; scope: string }[];  // e.g. [{match:'v-for', scope:'keyword.control.loop.vue'}, …]
+    control: { match: TokenPattern; scope: string }[];  // e.g. [{match:lit('v-for'), scope:'keyword.control.loop.vue'}, …]
     shorthand: { char: string; scope: string }[];  // e.g. [{char:':', scope:'punctuation.attribute-shorthand.bind.html.vue'}, …]
     prefix: string;        // long-form directive prefix, e.g. 'v-'
     nameScope: string;     // scope for a directive name / argument (entity.other.attribute-name.html.vue)

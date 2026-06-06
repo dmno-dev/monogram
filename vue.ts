@@ -14,7 +14,7 @@
 // is HTML's raw-text mechanism with a per-block embed map) and only swaps the markup config
 // + scope name. We import those reusable pieces and build through `defineGrammar` — the same
 // API every other grammar uses — instead of spreading html's already-built grammar object.
-import { defineGrammar, lit } from './src/api.ts';
+import { defineGrammar, lit, alt } from './src/api.ts';
 import { tokens, rules, scopes, markup as htmlMarkup } from './html.ts';
 
 export default defineGrammar({
@@ -127,8 +127,8 @@ export default defineGrammar({
           { scope: 'meta.element', excludes: ['meta.attribute'] },
         ],
         control: [
-          { match: 'v-for', scope: 'keyword.control.loop.vue' },
-          { match: 'v-if|v-else-if|v-else', scope: 'keyword.control.conditional.vue' },
+          { match: lit('v-for'), scope: 'keyword.control.loop.vue' },
+          { match: alt(lit('v-if'), lit('v-else-if'), lit('v-else')), scope: 'keyword.control.conditional.vue' },
         ],
         shorthand: [
           { char: ':', scope: 'punctuation.attribute-shorthand.bind.html.vue' },

@@ -3977,7 +3977,7 @@ function buildMarkupInjectParts(grammar: CstGrammar, mainScopeName: string): { r
     const dir: TmPattern[] = [];
     for (const c of d.control) {         // v-for / v-if … — distinct scope, value embedded
       dir.push({
-        begin: `${beforeAttr}(${c.match})(?=[${assignCc}\\s${ccSlash}${ccClose}]|$)`,
+        begin: `${beforeAttr}(${tokenPatternToRegex(c.match)})(?=[${assignCc}\\s${ccSlash}${ccClose}]|$)`,
         beginCaptures: { '1': { name: c.scope } },
         end: endAttr, patterns: values,
       });
