@@ -16,11 +16,13 @@
 import vsctm from 'vscode-textmate';
 import onig from 'vscode-oniguruma';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { tests as tsTests } from './issue-cases.ts';
 import { cases as tsxCases } from './tsx-issue-cases.ts';
 import { cases as htmlCases } from './html-issue-cases.ts';
 import { cases as vueCases } from './vue-issue-cases.ts';
+import { cases as yamlCases } from './yaml-issue-cases.ts';
 import { scopeLookup as vueScopeLookup, officialAvailable as vueOfficialAvailable } from './vue-grammar-harness.ts';
 
 const { INITIAL, Registry, parseRawGrammar } = vsctm;
@@ -37,6 +39,11 @@ const official = {
   html: process.env.MONOGRAM_OFFICIAL_HTML ?? `${VSCODE}/html/syntaxes/html.tmLanguage.json`,
   js: process.env.MONOGRAM_OFFICIAL_JS ?? `${VSCODE}/javascript/syntaxes/JavaScript.tmLanguage.json`,
   css: process.env.MONOGRAM_OFFICIAL_CSS ?? `${VSCODE}/css/syntaxes/css.tmLanguage.json`,
+  // YAML's official baseline is the MAINTAINED RedCMD/YAML-Syntax-Highlighter (microsoft/vscode#232244
+  // switched VS Code off the dead textmate/yaml.tmbundle to it). Default = the clone at /tmp/redcmd-yaml
+  // (same as test/scope-gap-yaml.ts); VS Code's bundled YAML is the same grammar — point
+  // MONOGRAM_OFFICIAL_YAML at .../extensions/yaml/syntaxes/yaml.tmLanguage.json for that.
+  yaml: process.env.MONOGRAM_OFFICIAL_YAML ?? '/tmp/redcmd-yaml/syntaxes/yaml.tmLanguage.json',
 };
 
 function scopeAtFns(grammar: any, src: string) {
@@ -133,20 +140,60 @@ async function gradeVue(): Promise<Row[] | null> {
   return rows;
 }
 
+// ── YAML: cases are {id, title, src, at, want} (predicate-based, like HTML). Monogram's yaml
+// (source.yaml) vs the MAINTAINED RedCMD/YAML-Syntax-Highlighter — the same "official" baseline as
+// test/scope-gap-yaml.ts. That grammar is a dispatcher stub that include()s version-specific
+// sub-grammars (source.yaml.1.2 etc.) in the same syntaxes/ dir; load them all, or the official
+// scopes nothing. Both grammars are self-contained YAML (no embeds reached by these snippets).
+async function gradeYaml(): Promise<Row[] | null> {
+  if (!existsSync(official.yaml)) return null;
+  const syn = dirname(official.yaml);
+  const yamlExtra: Record<string, string> = {
+    'source.yaml.1.2': join(syn, 'yaml-1.2.tmLanguage.json'),
+    'source.yaml.1.1': join(syn, 'yaml-1.1.tmLanguage.json'),
+    'source.yaml.1.0': join(syn, 'yaml-1.0.tmLanguage.json'),
+    'source.yaml.1.3': join(syn, 'yaml-1.3.tmLanguage.json'),
+    'source.yaml.embedded': join(syn, 'yaml-embedded.tmLanguage.json'),
+  };
+  const mk = (path: string, extra: Record<string, string>) => new Registry({ onigLib, loadGrammar: async (sn) =>
+    sn === 'source.yaml' ? parseRawGrammar(read(path), 'yaml.json') :
+    (extra[sn] && existsSync(extra[sn])) ? parseRawGrammar(read(extra[sn]), `${sn}.json`) :
+    (sn.startsWith('source.') ? stub(sn) : null) });
+  const mono = (await mk('yaml.tmLanguage.json', {}).loadGrammar('source.yaml'))!;
+  const off = (await mk(official.yaml, yamlExtra).loadGrammar('source.yaml'))!;
+  return yamlCases.map(c => ({ id: c.id, title: c.title, mono: c.want(scopeAtFns(mono, c.src)(c.at, c.nth)), off: c.want(scopeAtFns(off, c.src)(c.at, c.nth)) }));
+}
+
 const langs: { name: string; key: string; opponent: string; rows: Row[] | null }[] = [
   { name: 'TypeScript', key: 'ts', opponent: 'microsoft/TypeScript-TmLanguage', rows: await gradeTs() },
   { name: 'TSX', key: 'tsx', opponent: 'microsoft/TypeScript-TmLanguage (TypeScriptReact)', rows: await gradeTsx() },
   { name: 'HTML', key: 'html', opponent: "VS Code's html.tmLanguage", rows: await gradeHtml() },
   { name: 'Vue', key: 'vue', opponent: 'vuejs/language-tools vue.tmLanguage.json', rows: await gradeVue() },
+  { name: 'YAML', key: 'yaml', opponent: 'RedCMD/YAML-Syntax-Highlighter yaml.tmLanguage.json', rows: await gradeYaml() },
 ];
 
 // ── render ──
 const mark = (b: boolean) => b ? '✓' : '·';
 // Link each tracker id to its issue. ids look like `#1050`, `tmbundle#118`, `vscode#140360`,
-// or `#6007/#2096/#520`; the prefix (or the language) selects the repo.
-const REPO: Record<string, string> = { ts: 'microsoft/TypeScript-TmLanguage', tsx: 'microsoft/TypeScript-TmLanguage', html: 'textmate/html.tmbundle', vue: 'vuejs/language-tools' };
-const PREFIX: Record<string, string> = { tmbundle: 'textmate/html.tmbundle', vscode: 'microsoft/vscode' };
-const linkify = (id: string, key: string) => id.replace(/([a-z]+)?#(\d+)/g, (_m, pfx, num) => `[${pfx ?? ''}#${num}](https://github.com/${(pfx && PREFIX[pfx]) || REPO[key]}/issues/${num})`);
+// `#6007/#2096/#520`, a full `owner/repo#NN` slug (`atom/language-yaml#119`,
+// `RedCMD/YAML-Syntax-Highlighter#1`), or a bare short prefix (`tmbundle#38`). The slug, the short
+// prefix (resolved per-language so `tmbundle` → html vs yaml bundle), or the language selects the repo.
+const REPO: Record<string, string> = { ts: 'microsoft/TypeScript-TmLanguage', tsx: 'microsoft/TypeScript-TmLanguage', html: 'textmate/html.tmbundle', vue: 'vuejs/language-tools', yaml: 'RedCMD/YAML-Syntax-Highlighter' };
+// Short prefixes → repo. `tmbundle` is language-specific (the html vs the yaml bundle), so it's keyed
+// per language; the rest are global. An unknown prefix falls back to the language's REPO.
+const PREFIX: Record<string, string> = { vscode: 'microsoft/vscode' };
+const PREFIX_BY_LANG: Record<string, Record<string, string>> = {
+  html: { tmbundle: 'textmate/html.tmbundle' },
+  yaml: { tmbundle: 'textmate/yaml.tmbundle', atom: 'atom/language-yaml' },
+};
+// Match either a full `owner/repo` slug (contains a `/`, allows mixed case) OR a bare short prefix
+// (lowercase letters) OR nothing, immediately before `#NN`.
+const linkify = (id: string, key: string) => id.replace(/((?:[\w.-]+\/[\w.-]+)|[a-z]+)?#(\d+)/g, (_m, pfx, num) => {
+  const repo = !pfx ? REPO[key]
+    : pfx.includes('/') ? pfx                                   // already a full owner/repo slug
+    : (PREFIX_BY_LANG[key]?.[pfx] ?? PREFIX[pfx] ?? REPO[key]); // a short prefix
+  return `[${pfx ?? ''}#${num}](https://github.com/${repo}/issues/${num})`;
+});
 const graded = langs.filter(l => l.rows) as { name: string; key: string; opponent: string; rows: Row[] }[];
 // One-line tally + per-language detail, written into a single auto-generated region.
 // The summary used to be a table, but it just duplicated the detail below — collapse it to
