@@ -307,7 +307,7 @@
           "begin": "[\\t ]*([|>](?:[1-9][-+]?|[-+][1-9]?|[-+])?)(?=[\\t ]*(?:#|$))([\\t ]*.*)",
           "beginCaptures": {
             "1": {
-              "name": "string.unquoted.block.yaml"
+              "name": "keyword.control.flow.block-scalar.yaml"
             },
             "2": {
               "patterns": [
@@ -425,7 +425,7 @@
           "begin": "[\\t ]*([|>](?:[1-9][-+]?|[-+][1-9]?|[-+])?)(?=[\\t ]*(?:#|$))([\\t ]*.*)",
           "beginCaptures": {
             "1": {
-              "name": "string.unquoted.block.yaml"
+              "name": "keyword.control.flow.block-scalar.yaml"
             },
             "2": {
               "patterns": [

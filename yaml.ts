@@ -598,7 +598,7 @@ const indent: IndentConfig = {
   flowOpen: ['[', '{'],
   flowClose: [']', '}'],
   comment: '#',
-  blockScalar: { introducers: ['|', '>'], token: 'BlockScalar', documentMarkers: ['---', '...'] },
+  blockScalar: { introducers: ['|', '>'], token: 'BlockScalar', documentMarkers: ['---', '...'], indicatorScope: 'keyword.control.flow.block-scalar' },
   compactIndicators: ['-', '?'],
   // Tag-handle per-document membership (§6.8.2 / §6.9.1): a named handle `!h!` used by a Tag must
   // have been declared by a `%TAG !h! …` directive in the SAME document's prologue (the default `!`

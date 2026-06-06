@@ -282,7 +282,10 @@ export interface IndentConfig {
   // `documentMarkers` (e.g. ['---','...']) are col-0 strings that ALWAYS terminate a block scalar
   // (a doc boundary outranks indentation) and, when one heads the introducer's line (`--- >`),
   // mark it a document-ROOT scalar whose content may sit at column 0 (auto-detected, parent = -1).
-  blockScalar?: { introducers: string[]; token: string; documentMarkers?: string[] };
+  // `indicatorScope` (optional) re-scopes just the `|`/`>`(+chomping/indent) introducer — a structural
+  // control sigil, not content; absent → the block-scalar token's own scope (introducer reads as the
+  // body string). The body always keeps the token scope; only the introducer capture is re-scoped.
+  blockScalar?: { introducers: string[]; token: string; documentMarkers?: string[]; indicatorScope?: string };
   // Compact-notation indicators (YAML `-` / `?`): a block entry indicator whose nested node begins
   // INLINE on the same line (`- item: a`, `? - x`). The node's true indentation is then the column
   // of its first char AFTER the indicator, not the indicator's own column — so a following SIBLING

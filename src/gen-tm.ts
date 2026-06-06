@@ -4634,7 +4634,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
   // sub-pattern, the funky body builder, the inner introducer rule, and the header-prefix includes.
   // Assigned inside §2a; reused in §2b so both block-scalar shapes use one portable structure.
   let bsIntro = '';
-  let bsFunkyIntroRule: ((content: string) => TmPattern) | null = null;
+  let bsFunkyIntroRule: ((indicatorScope: string, contentScope: string) => TmPattern) | null = null;
   let bsHeaderIncludes: { include: string }[] = [];
   if (blockScalar) {
     const bsTok = grammar.tokens.find(t => t.name === blockScalar.token);
@@ -4647,6 +4647,11 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     const intro = `${introClass}${indicators}`;
     const commentIncs = commentIncludeKeys.map(k => ({ include: `#${k}` }));
     const bsContent = `${bsScope}.${langName}`;
+    // The introducer (`|`/`>` + chomping/indent) is a structural control sigil, not body content. Every
+    // OTHER YAML indicator (`:`/`[`/`{`/`,`/`?`/`&`/`*`/`!`) is scoped non-string; the block-scalar
+    // introducer was the lone exception (it inherited the body's string scope). Re-scope it via the
+    // grammar's opt-in indicatorScope; absent → the body scope (legacy, introducer reads as content).
+    const bsIndicator = blockScalar.indicatorScope ? `${blockScalar.indicatorScope}.${langName}` : bsContent;
     // A block scalar BODY must scope `string.unquoted.block` across EMPTY lines. A flat `begin`/`end`
     // region (the old textmate/yaml.tmbundle shape) collapses at the first LEADING empty line: the
     // inner indent rule has not opened yet, nothing is consumed, and the `(?!\G)` arm of the `end`
@@ -4693,11 +4698,11 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     // Inner introducer rule: leading `[\t ]*` skips the separator whitespace (the space after `:`/`-`),
     // captures the `|`/`>` (+indicators) and the rest-of-line trailing comment, then runs the funky
     // body (its `begin: $` opens at the header-line EOL). `while: \G` keeps it alive across the body.
-    const bsIntroRule = (content: string) => ({
+    const bsIntroRule = (indicatorScope: string, contentScope: string) => ({
       begin: `[\\t ]*(${intro})(?=[\\t ]*(?:#|$))([\\t ]*.*)`,
-      beginCaptures: { '1': { name: content }, '2': { patterns: commentIncs } },
+      beginCaptures: { '1': { name: indicatorScope }, '2': { patterns: commentIncs } },
       while: '\\G',
-      patterns: funkyBody(content),
+      patterns: funkyBody(contentScope),
     });
     // Header-prefix token includes: re-scope the part of the header line BEFORE the introducer (a doc
     // marker / key / `:` / anchor / tag), since the line-start indent consume swallowed the engine
@@ -4734,7 +4739,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     repository[bsKey] = {
       begin: `^([ \\t]*)(?=${bsVp}${intro}[\\t ]*(?:#|$))`,
       while: '\\G(?=\\1[ \\t]|[ \\t]*$)',
-      patterns: [bsIntroRule(bsContent), ...bsHeaderIncs],
+      patterns: [bsIntroRule(bsIndicator, bsContent), ...bsHeaderIncs],
     };
     // Sequence entry whose mapping VALUE is the block scalar (`- a: |` … `  b:`): bound siblings at the
     // KEY column, not the dash column, else the next entry key is swallowed. The begin consumes the
@@ -4745,7 +4750,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       begin: `^([ \\t]*)(-)([ \\t]+)(?=(?:[-?][\\t ]+)*[^\\n]*?:[\\t ]+${bsProp}${intro}[\\t ]*(?:#|$))`,
       beginCaptures: { '2': { name: `punctuation.${langName}` } },
       while: '\\G(?=\\1[ \\t]\\3[ \\t]|[ \\t]*$)',
-      patterns: [bsIntroRule(bsContent), ...bsHeaderIncs],
+      patterns: [bsIntroRule(bsIndicator, bsContent), ...bsHeaderIncs],
     };
     topPatterns.push({ include: `#${bsKey}-seq` });
   }
@@ -4807,7 +4812,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
         begin: `^([ \\t]*)(${escapeRegex(explicitKey.indicator)})([\\t ]+)(?=${bsIntro}[\\t ]*(?:#|$))`,
         beginCaptures: { '2': { name: `punctuation.definition.map.key.${langName}` } },
         while: '\\G(?=\\1[ \\t]|[ \\t]*$)',
-        patterns: [bsFunkyIntroRule(keyScope), ...bsHeaderIncludes],
+        patterns: [bsFunkyIntroRule(keyScope, keyScope), ...bsHeaderIncludes],
       };
       topPatterns.push({ include: '#blockscalar-key' });
     }
