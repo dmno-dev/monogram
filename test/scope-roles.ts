@@ -78,6 +78,12 @@ export const R = {
   // markup (HTML/XML/…) — for the unified scope-gap harness across vscode#203212 languages
   tagName: 'tag.name',
   attrName: 'attr.name',
+  // YAML structural roles the coarse key/value/comment oracle used to miss (issue #12):
+  // anchors (&a), aliases (*a), document markers (--- / ...), string escapes (\n).
+  anchor: 'anchor',
+  alias: 'alias',
+  docMarker: 'doc.marker',
+  escape: 'escape',
   // lexical floor
   op: 'op',
   punct: 'punct',
@@ -239,6 +245,16 @@ export const ROLE_SPEC: Record<RoleName, RoleSpec> = {
   // ── markup roles (HTML/XML) — entity names a highlighter must get right ───────
   [R.tagName]: { tier: 'strict', desc: 'element tag name (<div>, </div>)', exact: ['entity.name.tag'], family: ['entity.name', 'meta.tag', 'support.class.component'] },
   [R.attrName]: { tier: 'strict', desc: 'attribute name (class=, id=)', exact: ['entity.other.attribute-name'], family: ['entity.other'] },
+  // ── YAML structural roles (issue #12) ─────────────────────────────────────────
+  // An anchor NAME (`&a`): official `variable.other.anchor`, Monogram `entity.name.type.anchor` —
+  // both defensible, so accept either. A mis-scope (e.g. the unscoped `source` of `? &a`) reads WRONG.
+  [R.anchor]: { tier: 'strict', desc: 'YAML anchor name (&a)', exact: ['variable.other.anchor', 'entity.name.type.anchor'], family: ['variable.other', 'entity.name', 'variable'] },
+  [R.alias]: { tier: 'strict', desc: 'YAML alias name (*a)', exact: ['variable.other.alias'], family: ['variable.other', 'variable', 'entity.name'] },
+  // A document marker (`---` / `...`): official `entity.other.document.begin`/`.end`.
+  [R.docMarker]: { tier: 'strict', desc: 'YAML document marker (--- / ...)', exact: ['entity.other.document', 'keyword.control'], family: ['entity.other', 'keyword', 'punctuation.definition'] },
+  // A string escape (`\n`, `\t`, `\\`, `\uXXXX`): both engines use constant.character.escape — for a
+  // VALUE; a mis-scope (e.g. inside a quoted KEY painted flat entity.name.tag) reads WRONG.
+  [R.escape]: { tier: 'strict', desc: 'string escape sequence (\\n, \\t, …)', exact: ['constant.character.escape'], family: ['constant.character', 'constant.other'] },
 
   // ── lexical floor: reported, excluded from the headline ───────────────────────
   [R.op]: { tier: 'lexical', desc: 'operator punctuation (+ - * = => …)', exact: ['keyword.operator'], family: ['keyword', 'punctuation', 'storage', 'meta'] },
@@ -345,8 +361,9 @@ export function roleFamily(role: RoleName): Family {
   switch (role) {
     case R.typeRef: case R.typeDecl: case R.typeBuiltin: case R.typeParam: return 'type';
     case R.propAccess: case R.propDecl: case R.methodCall: return 'property';
-    case R.litString: case R.litNumber: case R.litRegex: case R.litBigint: case R.litTemplate: return 'literal';
+    case R.litString: case R.litNumber: case R.litRegex: case R.litBigint: case R.litTemplate: case R.escape: return 'literal';
     case R.comment: return 'comment';
+    case R.docMarker: return 'keyword';
     case R.kwControl: case R.kwOperator: case R.kwStorage: case R.kwOther: case R.constBuiltin: case R.thisSuper: return 'keyword';
     case R.op: case R.punct: return 'punct';
     default: return 'value'; // funcDecl, parameter, varDecl, valueRef, classRef, namespace, enumMember, importBinding
