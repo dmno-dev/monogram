@@ -181,7 +181,7 @@ export const ROLE_SPEC: Record<RoleName, RoleSpec> = {
   },
 
   // ── literals ──────────────────────────────────────────────────────────────────
-  [R.litString]: { tier: 'strict', desc: 'string literal', exact: ['string'], family: ['punctuation.definition.string', 'punctuation'] },
+  [R.litString]: { tier: 'strict', desc: 'string literal', exact: ['string', 'keyword.control.flow.block-scalar'], family: ['punctuation.definition.string', 'punctuation'] },
   [R.litNumber]: { tier: 'strict', desc: 'numeric literal', exact: ['constant.numeric'], family: ['constant', 'keyword.other.unit'] },
   [R.litRegex]: { tier: 'strict', desc: 'regular-expression literal', exact: ['string.regexp'], family: ['string', 'constant.regexp', 'punctuation.definition.string'] },
   [R.litBigint]: { tier: 'strict', desc: 'bigint literal', exact: ['constant.numeric'], family: ['constant'] },
@@ -386,6 +386,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     [R.typeRef, 'support.class.ts', 'exact'],
     [R.typeRef, 'keyword.control.ts', 'wrong'],
     [R.litString, 'string.quoted.double.ts', 'exact'],
+    [R.litString, 'keyword.control.flow.block-scalar.literal.yaml', 'exact'],
     [R.litString, 'punctuation.definition.string.begin.ts', 'family'],
     [R.litNumber, 'constant.numeric.decimal.ts', 'exact'],
     [R.comment, 'comment.line.double-slash.ts', 'exact'],
@@ -440,8 +441,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // THE FIX: a stacked key — entity.name.tag is the PARENT, the innermost is the string
     // delimiter. Innermost-only marked official wrong; stack-aware credits the parent role.
     [R.tagName, ['source.yaml', 'entity.name.tag.yaml', 'punctuation.definition.string.begin.yaml'], 'exact', 'YAML key: tagName is the parent of the string delimiter'],
-    // YAML block-scalar `|`/`>` is keyword.control nested UNDER the string scope.
-    [R.kwOther, ['source.yaml', 'string.unquoted.block.yaml', 'keyword.control.flow.block-scalar.yaml'], 'exact', 'block-scalar indicator under string'],
+    // YAML block-scalar `|`/`>` is semantically part of the scalar, even when scoped as keyword.control.
+    [R.litString, ['source.yaml', 'keyword.control.flow.block-scalar.yaml'], 'exact', 'block-scalar indicator as scalar literal'],
     // HTML <svg> tag name correctly nested under an invalid.illegal overlay region.
     [R.tagName, ['text.html', 'meta.tag.metadata.svg', 'entity.name.tag.svg', 'invalid.illegal.unrecognized-tag.html'], 'exact', 'svg tag name with an illegal overlay innermost'],
     // a Vue cast leak: the value `msg` correctly painted, deeper scope is just a meta wrapper.
