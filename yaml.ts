@@ -30,8 +30,14 @@ const hexDigit = oneOf(digit, range('A', 'F'), range('a', 'f'));
 const whitespace = oneOf('\t', '\n', '\f', '\r', ' ');
 const nonWhitespace = noneOf(whitespace);
 const hashAfterNonSpace = seq('#', precededBy(seq(nonWhitespace, '#')));
-const DocStart = token(lit('---'), { scope: 'punctuation.definition.directives-end' });
-const DocEnd = token(lit('...'), { scope: 'punctuation.definition.document-end' });
+// Document markers: `---` (directives end / document begin) and `...` (document end). Both must be
+// followed by whitespace or EOL — `---foo` / `...bar` are plain scalars, not markers — so the
+// lookahead keeps the marker from stealing a plain scalar's leading dashes/dots. Scoped
+// `entity.other.document.*` (the maintained-grammar convention) so the highlighter paints them as
+// document structure, not as a string.
+const docMarkerEnd = followedBy(alt(oneOf('\t', ' '), '\r', '\n', end()));
+const DocStart = token(seq('---', docMarkerEnd), { scope: 'entity.other.document.begin' });
+const DocEnd = token(seq('...', docMarkerEnd), { scope: 'entity.other.document.end' });
 const Comment = token(seq('#', star(noneOf('\n'))), { skip: true, scope: 'comment.line.number-sign' });
 // Double-quoted scalar body. The escape set is FIXED (YAML 1.2 §5.7): a `\` may only precede one
 // of `0 a b t n v f r e " / \ N _ L P`, a literal space/tab, a `x`+2 / `u`+4 / `U`+8 hex escape, or

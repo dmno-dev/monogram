@@ -125,6 +125,7 @@ function scopeToMonarch(scope: string): string {
   if (scope.startsWith('storage')) return 'keyword';
   if (scope.startsWith('keyword.operator')) return 'operator';
   if (scope.startsWith('keyword')) return 'keyword';
+  if (scope.startsWith('entity.other.document')) return 'delimiter';  // YAML --- / ... markers
   if (scope.startsWith('entity.name.function.decorator')) return 'annotation';
   if (scope.startsWith('entity.name.function')) return 'identifier';
   if (scope.startsWith('entity.name.type')) return 'type.identifier';

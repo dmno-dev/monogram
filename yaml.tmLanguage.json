@@ -28,6 +28,12 @@
       "include": "#key"
     },
     {
+      "include": "#docstart"
+    },
+    {
+      "include": "#docend"
+    },
+    {
       "include": "#dquote"
     },
     {
@@ -50,12 +56,6 @@
     },
     {
       "include": "#plain"
-    },
-    {
-      "include": "#docstart"
-    },
-    {
-      "include": "#docend"
     },
     {
       "include": "#punctuation"
@@ -81,12 +81,12 @@
   ],
   "repository": {
     "docstart": {
-      "name": "punctuation.definition.directives-end.readwrite.yaml",
-      "match": "---"
+      "name": "entity.other.document.begin.yaml",
+      "match": "---(?=[\\t ]|\\r|\\n|$)"
     },
     "docend": {
-      "name": "punctuation.definition.document-end.yaml",
-      "match": "\\.\\.\\."
+      "name": "entity.other.document.end.yaml",
+      "match": "\\.\\.\\.(?=[\\t ]|\\r|\\n|$)"
     },
     "yamldirective": {
       "name": "keyword.other.directive.yaml",
@@ -203,7 +203,7 @@
       "match": "(?:[^\\t\\n\\f\\r \\-?:,\\[\\]{}#&*!|>'\"%@`]|[\\-?:](?=[^\\t\\n\\f\\r ,\\[\\]{}]))(?:[^:#\\n]|:(?=[^\\t\\n\\f\\r ])|#(?<=[^\\t\\n\\f\\r ]#))*"
     },
     "indent": {
-      "name": "variable.other.yaml",
+      "name": "variable.other.readwrite.yaml",
       "match": "(?!)"
     },
     "dedent": {

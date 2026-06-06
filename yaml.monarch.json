@@ -711,14 +711,14 @@
         }
       ],
       [
-        "---",
+        "---(?=[\\t ]|\\r|\\n|$)",
         {
           "token": "delimiter",
           "switchTo": "@value"
         }
       ],
       [
-        "\\.\\.\\.",
+        "\\.\\.\\.(?=[\\t ]|\\r|\\n|$)",
         {
           "token": "delimiter",
           "switchTo": "@value"

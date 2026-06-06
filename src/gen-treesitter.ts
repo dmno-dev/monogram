@@ -902,6 +902,7 @@ function scopeToCapture(scope: string): string | null {
     ['entity.name.function', '@function'],
     ['entity.name.type', '@type'],
     ['entity.name', '@constructor'],
+    ['entity.other.document', '@punctuation.delimiter'],  // YAML --- / ... markers
     ['entity.other.property', '@property'],
     ['support.type.primitive', '@type.builtin'],
     ['support.type', '@type.builtin'],

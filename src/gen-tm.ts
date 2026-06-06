@@ -4262,8 +4262,15 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
   // punctuation tokens (e.g. JSX's `/>` / `</`, which also classify as
   // `variable.other` and would otherwise be mistaken for the identifier pattern,
   // corrupting every ident-derived pattern).
+  // The fallback (a token whose PATTERN classifies as variable.other) also requires the token's
+  // RESOLVED scope to be variable.other — else a grammar with no identifier token (YAML) picks the
+  // first punctuation token whose pattern is unrecognised (e.g. `---`, classified variable.other),
+  // mis-tagging it as the identifier and appending `.readwrite` to its real scope. An explicitly
+  // scoped token (entity.other.document, variable.other.alias, …) is excluded; a true bare
+  // identifier (JS `Ident`, no explicit scope) still qualifies.
   const identToken = grammar.tokens.find(t => t.identifier)
-    ?? grammar.tokens.find(t => classifyToken(t, { explicitScope: false }).scope === 'variable.other');
+    ?? grammar.tokens.find(t => classifyToken(t, { explicitScope: false }).scope === 'variable.other'
+      && classifyToken(t).scope === 'variable.other');
   // Widen the identifier pattern so non-ASCII names (`Ω`, Cyrillic `А`) are scoped,
   // matching the parser lexer's Unicode fallback. This widened form is used only in
   // TextMate (Oniguruma) output, never by the lexer.
@@ -7137,6 +7144,10 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     // scalar it overlaps, so it must be tried first. (Markup tag names live inside begin/end
     // regions, never as a top-level include, so this only ranks the YAML-style key scalar.)
     if (entry?.match && scope.startsWith('entity.name.tag')) return 0.9;
+    // A document marker (`---`/`...`, scoped entity.other.document) is a `lit`+lookahead token that
+    // OVERLAPS the plain scalar (`---` also matches PLAIN_HEAD), so it must out-rank the plain-scalar
+    // catch-all (8.8) — else `---` paints as string.unquoted. Its lookahead pins it to a real marker.
+    if (entry?.match && scope.startsWith('entity.other.document')) return 0.95;
     // An UNQUOTED plain-scalar catch-all (`string.unquoted`) is the least-specific scalar shape
     // (it has no opening delimiter and matches almost any bare run), so — unlike a quoted/regex
     // string — it must rank AFTER the typed-literal scalars (constant.numeric / constant.language)
