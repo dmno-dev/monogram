@@ -311,6 +311,11 @@ export interface IndentConfig {
     explicitKey?: string;  // the flow `?` explicit-key indicator (e.g. punctuation.definition.key-value)
   };
   comment?: string;       // line-comment introducer ignored for indentation (e.g. '#')
+  // The mapping KEY/VALUE separator literal (YAML `:`). Used by the derived highlighter's multi-line
+  // plain-scalar fold regions (gen-tm §2a′/§2a″) to recognise a `key:`-led line as STRUCTURAL (a
+  // sibling that ends a fold) vs a bare plain-scalar continuation. Declared here (not hardcoded in the
+  // generator) so the YAML region code stays data-driven. Absent → defaults to ':'.
+  keyValueSeparator?: string;
   // Block scalars (YAML `|` / `>`): when the rest of a line is an introducer + indicators, the
   // following more-indented lines are verbatim content emitted as ONE token (like raw-text, but
   // bounded by indentation rather than a close tag). `introducers` are the leading chars (['|','>']).

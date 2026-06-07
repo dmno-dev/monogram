@@ -4645,6 +4645,20 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
   let bsIndicatorScope = '';
   let bsContentScope = '';
   if (blockScalar) {
+    // YAML structural literals DERIVED from the indent config (kept data-driven, NOT hardcoded in the
+    // generator) — used by the block-scalar value-prefix (`bsVp`) and the multi-line plain-scalar fold
+    // regions (§2a′/§2a″): the comment introducer, the compact indicators (`-`/`?`) as an alternation
+    // and a char class, the document markers (`---`/`...`), the flow brackets (for the key-scan
+    // exclusion class), and the mapping key/value separator (`:`). The one structural literal WITHOUT a
+    // dedicated field — node-property `&`/`!` in `bsProp` below — is anchor/tag-specific (it comes from
+    // the Anchor/Tag tokens, not the indent config) and stays inline.
+    const ind = grammar.indent!;
+    const cmtLit = escapeRegex(ind.comment ?? '#');
+    const compactAlt = (ind.compactIndicators ?? []).map((c) => `${escapeRegex(c)}[\\t ]`).join('|');
+    const compactCls = `[${(ind.compactIndicators ?? []).map(escapeForCharClass).join('')}]`;
+    const docAlt = (blockScalar.documentMarkers ?? []).map(escapeRegex).join('|');
+    const flowEx = `[^\\n${[...(ind.flowOpen ?? []), ...(ind.flowClose ?? [])].map(escapeForCharClass).join('')}]`;
+    const kvSep = escapeRegex(ind.keyValueSeparator ?? ':');
     const bsTok = grammar.tokens.find(t => t.name === blockScalar.token);
     const bsKey = blockScalar.token.toLowerCase();
     const bsScope = bsTok?.scope ?? 'string.unquoted.block';
@@ -4739,7 +4753,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
     // END in a pipe) from opening a region: after `a: ` the next token is `foo`, not a separator/
     // key-colon/property, so the lookahead fails. The key arm matches up to the FIRST `: ` separator.
     const bsProp = '(?:[&!][^\\t\\n\\f\\r \\[\\]{},]*[\\t ]+)*';
-    const bsVp = `(?:(?:---|\\.\\.\\.)[\\t ]+)?(?:[-?][\\t ]+)*(?:[^\\n]*?:[\\t ]+)?${bsProp}`;
+    const bsVp = `(?:(?:${docAlt})[\\t ]+)?(?:${compactCls}[\\t ]+)*(?:[^\\n]*?${kvSep}[\\t ]+)?${bsProp}`;
     // Expose the introducer / inner-rule / header-includes to §2b (the `? |` explicit-key variant).
     bsIntro = intro;
     bsFunkyIntroRule = bsIntroRule;
@@ -4832,7 +4846,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       // flow bracket (a `{`/`[` is flow, handled elsewhere), and `:(?:[\t ]|$)` requires the colon to be
       // a real key separator (`http://x` keeps its glued `:` → still plain content). Used as a NEGATIVE
       // lookahead to bound the fold at the first sibling/comment line, matching the parser's foldedPlain.
-      const structAhead = `(?:#|-[\\t ]|\\?[\\t ]|[^\\n{}\\[\\]]*?:(?:[\\t ]|$))`;
+      const structAhead = `(?:${cmtLit}|${compactAlt}|${flowEx}*?${kvSep}(?:[\\t ]|$))`;
       // Value-position lookahead: after the node indent is stripped, the line must carry an INLINE
       // BLOCK plain value — either `<key>: <plain>` (mapping value) or a `-`/`?` indicator + `<plain>`
       // (sequence entry / explicit key). The plain value is confirmed by `(?=plainSrc)`, which only
@@ -4844,7 +4858,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       // a flow collection (`{ a: b,\n  c }` / `a: { b: c,\n  d }`) is a multi-line begin/end region of
       // its own — a `{`/`[` before the `:` means the `:` is a FLOW separator, not a block one, so the
       // region must NOT open and steal those lines from #flow-mapping/#flow-sequence.
-      const plainVp = `(?:(?:---|\\.\\.\\.)[\\t ]+)?(?:(?:[-?][\\t ]+)+(?:[^\\n{}\\[\\]]*?:[\\t ]+)?|[^\\n{}\\[\\]]*?:[\\t ]+)(?=${plainSrc})`;
+      const plainVp = `(?:(?:${docAlt})[\\t ]+)?(?:(?:${compactCls}[\\t ]+)+(?:${flowEx}*?${kvSep}[\\t ]+)?|${flowEx}*?${kvSep}[\\t ]+)(?=${plainSrc})`;
       // Header-line token includes: the same shape any plain `key: value` line gets, so the header is
       // scoped identically to the top level (only the CONTINUATION changes). Includes the typed-value
       // tokens (`#num`/`#boolnull`) so a SINGLE-line `a: 1` keeps `constant.numeric`, and the full
@@ -4897,7 +4911,7 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       // an inner `begin:$`/`while:\G` body swallows each following line as `string.unquoted` (stopping
       // before an inline ` #` comment, which then falls to `#comment`). structRelease extends §2a′'s
       // `structAhead` with the doc markers (a `---`/`...` ends a doc-body fold).
-      const structRelease = `(?:#|-[\\t ]|\\?[\\t ]|(?:---|\\.\\.\\.)(?:[\\t ]|$)|[^\\n{}\\[\\]]*?:(?:[\\t ]|$))`;
+      const structRelease = `(?:${cmtLit}|${compactAlt}|(?:${docAlt})(?:[\\t ]|$)|${flowEx}*?${kvSep}(?:[\\t ]|$))`;
       // The HEADER line is scoped by the normal token includes (so a standalone bare `42`/`true` keeps
       // its `#num`/`#boolnull` typing). A CONTINUATION line that opens with a non-token char (`%`, which
       // no header include matches) would leave that char unscoped and let a LATER `#plain` claim only the

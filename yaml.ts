@@ -614,6 +614,7 @@ const indent: IndentConfig = {
     explicitKey: 'punctuation.definition.key-value',
   },
   comment: '#',
+  keyValueSeparator: ':',
   blockScalar: { introducers: ['|', '>'], token: 'BlockScalar', documentMarkers: ['---', '...'], indicatorScope: 'keyword.control.flow.block-scalar' },
   compactIndicators: ['-', '?'],
   // Tag-handle per-document membership (§6.8.2 / §6.9.1): a named handle `!h!` used by a Tag must
