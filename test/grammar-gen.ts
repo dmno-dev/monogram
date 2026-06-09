@@ -799,6 +799,34 @@ class Walker {
     ];
   }
 
+  // DIRECTED RAW-TEXT / VOID element using the SPECIFIC declared tag literals (`grammar.markup.rawText.tags`
+  // / `voidTags`), NOT a generic identifier sample. The un-biased enumeration + tokenCover only ever
+  // materialise a generic placeholder tag name (`a`), so the SPECIAL-tag behaviours — a case-insensitive
+  // raw-text region, a void element — are NEVER exercised by generation. This forces them: `<script><b</script>`
+  // (a raw-text body carrying a would-be `<b` tag the region must keep as content) and `<br>`. Combined with
+  // the tag-name CASE variation in `push`, this is what produces `<SCRIPT><b</SCRIPT>` — the witness for a
+  // case-sensitive raw-text region. Returns [] when the grammar declares no rawText/void tags.
+  markupRawText(): Emission[][] {
+    const mk = this.grammar.markup;
+    const nameTok = this.grammar.tokens.find((t) => t.identifier);
+    if (!mk || !nameTok) return [];
+    const open = mk.tagOpen, closeTag = mk.tagClose, closeMk = mk.closeMarker ?? '';
+    const out: Emission[][] = [];
+    // Close emitted as SEPARATE open + closeMarker + name (NOT `</` combined) so the materializer GLUES
+    // it — `<`(tagOpen)`/`(prev=tagOpen→adjacent)`script`(prev=closeMarker→adjacent)`>` = `</script>`. A
+    // combined `</` lit would take a space before the name (`</ script`) and the lexer's `</script` close
+    // matcher would miss it, leaving the element unclosed.
+    for (const tag of mk.rawText?.tags ?? []) out.push([
+      { t: 'lit', value: open }, { t: 'tok', name: nameTok.name, text: tag }, { t: 'lit', value: closeTag },
+      { t: 'lit', value: open + 'b' },                                          // raw-text body: a would-be `<b` tag
+      { t: 'lit', value: open }, { t: 'lit', value: closeMk }, { t: 'tok', name: nameTok.name, text: tag }, { t: 'lit', value: closeTag },
+    ]);
+    for (const tag of (mk.voidTags ?? []).slice(0, 1)) out.push([
+      { t: 'lit', value: open }, { t: 'tok', name: nameTok.name, text: tag }, { t: 'lit', value: closeTag },
+    ]);
+    return out;
+  }
+
   // The leading literal of an alt arm's seq/group spine (the indicator a `? …`/`- …` arm starts with).
   private armLeadLiteral(e: RuleExpr): string | null {
     if (e.type === 'literal') return e.value;
@@ -998,7 +1026,7 @@ export function commentSpec(grammar: CstGrammar): CommentSpec | null {
 // The body is a minimal `' c '` (space-padded), legal in every comment grammar. `tagClose` (markup only)
 // is the grammar's tag-close delimiter (`>`), passed in so the function bakes in no HTML-specific literal.
 // Returns null when no safe position exists in this particular input (then no comment variant is produced).
-function injectComment(text: string, spec: CommentSpec, tagClose: string): { text: string; start: number; end: number; comment: string } | null {
+function injectComment(text: string, spec: CommentSpec, tagClose: string, mk?: CstGrammar['markup']): { text: string; start: number; end: number; comment: string } | null {
   if (spec.mode === 'token-stream') {
     const comment = spec.open + ' c ' + spec.close;     // `/* c */`
     for (let i = 1; i < text.length - 1; i++) {
@@ -1022,12 +1050,25 @@ function injectComment(text: string, spec: CommentSpec, tagClose: string): { tex
     }
     return null;
   }
-  // markup — right after the first tagClose (`>`): comment text BETWEEN tags / in content is safe.
+  // markup — after a tagClose (`>`), but NEVER inside a RAW-TEXT element body: a markup comment there is
+  // raw-text content (e.g. inside `<script>`/`<style>`), not a comment, so the witness would be a false
+  // divergence (the highlighter correctly scopes it as embedded/raw content, the parser keeps no comment).
+  // Find the first `>` whose tag is NOT an OPEN raw-text element. All grammar-derived (mk / rawText.tags).
   const comment = spec.open + ' c ' + spec.close;       // `<!-- c -->`
-  const gt = tagClose ? text.indexOf(tagClose) : -1;
-  if (gt < 0) return null;
-  const start = gt + tagClose.length;
-  return { text: text.slice(0, start) + comment + text.slice(start), start, end: start + comment.length, comment };
+  if (!tagClose) return null;
+  const tagOpen = mk?.tagOpen ?? '', closeMk = mk?.closeMarker ?? '';
+  const rawSet = new Set((mk?.rawText?.tags ?? []).map((t) => t.toLowerCase()));
+  for (let from = 0; ; ) {
+    const gt = text.indexOf(tagClose, from);
+    if (gt < 0) return null;
+    const lt = tagOpen ? text.lastIndexOf(tagOpen, gt) : -1;          // the tagOpen this `>` pairs with
+    const inner = lt >= 0 ? text.slice(lt + tagOpen.length, gt) : ''; // `script` / `/script` / `a attr="x"`
+    const isClose = !!closeMk && inner.startsWith(closeMk);
+    const name = (isClose ? inner.slice(closeMk.length) : inner).match(/^[A-Za-z][A-Za-z0-9]*/)?.[0]?.toLowerCase() ?? '';
+    if (!isClose && rawSet.has(name)) { from = gt + tagClose.length; continue; }   // opens a raw-text body → skip
+    const start = gt + tagClose.length;
+    return { text: text.slice(0, start) + comment + text.slice(start), start, end: start + comment.length, comment };
+  }
 }
 
 // ─── MATERIALIZE: emissions → text + token spans ──────────────────────────────────
@@ -1137,6 +1178,17 @@ function compactify(ems: Emission[], compactLits: Set<string>): Emission[] {
 }
 
 // ─── TOP LEVEL ────────────────────────────────────────────────────────────────────
+// UPPERCASE the tag NAMES in a markup string — the letters right after `tagOpen` (`<`) or
+// `tagOpen`+`closeMarker` (`</`). Tag names are case-insensitive in markup (the lexer folds case), so this
+// is an equally-legal variant; `<!`-led forms (comments / doctype) start with a non-letter and are untouched.
+// Derived from `grammar.markup` (tagOpen / closeMarker) — no hardcoded `<`.
+function caseVaryTags(grammar: CstGrammar, text: string): string {
+  const m = grammar.markup; if (!m) return text;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${esc(m.tagOpen)}${m.closeMarker ? `${esc(m.closeMarker)}?` : ''})([A-Za-z][A-Za-z0-9]*)`, 'g');
+  return text.replace(re, (_full, open: string, name: string) => open + name.toUpperCase());
+}
+
 export function generateInputs(grammar: CstGrammar, opts: GenOptions = {}): GenInput[] {
   const depth = opts.depth ?? 5;
   const cap = opts.cap ?? 6;
@@ -1186,6 +1238,18 @@ export function generateInputs(grammar: CstGrammar, opts: GenOptions = {}): GenI
       if (!text.trim() || text.length > 2000 || seen.has(text)) continue;   // skip blank / over-long / duplicate
       seen.add(text);
       out.push({ text, tokens, strategy: job.strat, rule });
+      // markup: a CASE-VARIED copy (UPPERCASE the tag NAMES). Tag-name matching is case-INSENSITIVE (the
+      // lexer folds case), so this is an equally-legal shape — but the materializer only ever emits the
+      // grammar's lowercase literals, so without this the generator NEVER produces `<SCRIPT>` and is blind
+      // to a parser↔highlighter case asymmetry (a case-sensitive highlighter region the lexer folds past —
+      // exactly the mixed-case raw-text bug). UPPERCASE preserves length, so the token offsets stay valid.
+      if (mode === 'markup') {
+        const up = caseVaryTags(grammar, text);
+        if (up !== text && !seen.has(up)) {
+          seen.add(up);
+          out.push({ text: up, tokens: tokens.map((t) => ({ ...t, text: up.slice(t.start, t.end) })), strategy: `case:${job.strat}`, rule });
+        }
+      }
     }
   };
 
@@ -1268,6 +1332,9 @@ export function generateInputs(grammar: CstGrammar, opts: GenOptions = {}): GenI
   if (mode === 'markup') {
     const sc = w.markupSelfCloseAttr();
     if (sc.length) push(sc, 'fuzz:markupSelfClose', entry.name);
+    // raw-text / void elements with the SPECIFIC tag literals (+ the case-varied UPPERCASE copy from push)
+    // → exercises the case-insensitive raw-text region the generic-placeholder enumeration never reached.
+    for (const ems of w.markupRawText()) push(ems, 'markupRawText', entry.name);
   }
 
   // 7) DIRECTED INDENT EXPLICIT-KEY-WITH-BRACKET-SCALAR (indent grammars) — `? k [y :\n  - p\n  - q`. The
@@ -1303,7 +1370,7 @@ export function generateInputs(grammar: CstGrammar, opts: GenOptions = {}): GenI
     const { parse } = createParser(grammar);   // lazy: only built when a comment can be injected
     for (const inp of base) {                  // a snapshot — never inject into an already-injected variant
       if (commentInputs.length >= maxInputs) break;
-      const inj = injectComment(inp.text, cspec, tagClose);
+      const inj = injectComment(inp.text, cspec, tagClose, grammar.markup);
       if (!inj) continue;
       if (inj.text.slice(inj.start, inj.end) !== inj.comment) continue;   // span sanity (the splice put it exactly here)
       // re-parse-and-DROP, at the ENTRY rule: the injected text must be a FULL DOCUMENT (the highlighter
