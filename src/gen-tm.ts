@@ -2,6 +2,7 @@ import type { CstGrammar, RuleExpr, RuleDecl, InjectClause, TokenDecl } from './
 import { collectLiterals, isKeywordLiteral } from './grammar-utils.ts';
 import {
   tokenEscapePatternSource,
+  tokenBlockPatternSource,
   tokenPatternBlockDelimiterSources,
   tokenPatternBlockDelimiters,
   tokenPatternIdentifierExtraChars,
@@ -3256,6 +3257,103 @@ function detectDeclarations(grammar: CstGrammar, tokenNames: Set<string>): DeclI
   return results;
 }
 
+// ── Value-position derivation (the depth-bug CLASS, one analysis) ──
+//
+// A flat per-line grammar carries no indent stack, so it re-introduces depth only where a region
+// fires. The depth bugs (#23/#24, the `? a:\n  -` gap) are all ONE class: a structural INTRODUCER
+// (`-`/`?`/`:`) opens an indented VALUE block, and the indicator at the deeper line must be scoped
+// STRUCTURALLY — but a per-shape detector that did not cover that exact (introducer × enclosing
+// position) combination lets a FOLD region claim the value line instead. detectExplicitKey (the
+// `? key` shape) and detectBlockSequence (the `[item, (Newline item)*]` shape) are PARTIAL VIEWS of
+// the SAME fact: those are two of the introducers that open a value block. This derives the WHOLE
+// set from the IR so emission and verification share one source — a value-position no detector named
+// can no longer be a silent gap.
+//
+// A VALUE-POSITION is an introducer literal `I` — drawn from `indent.compactIndicators ∪
+// {keyValueSeparator}` (the structural single-char literals that lead a nested block) — that is
+// IMMEDIATELY FOLLOWED, in some rule seq, by an (optional) element that REACHES, after an `Indent`
+// boundary, a value/`Node` alternation (`Indent <…alt…> Dedent` — the recursive value). That is:
+//   • `:` → MapValue/MapValueScalar (`[Indent, Node, Dedent]`), the block-mapping value;
+//   • `-` → Value (`[Indent, Node, Dedent]`), the sequence-item value;
+//   • `?` → MapValue (the explicit-key value half), AND the `:` inside ExplicitEntry.
+// Returns null when the family has no such shape (every non-indentation grammar), so the value-
+// position machinery is gated exactly like the detectors it subsumes.
+//
+// The set this returns is, by derivation, EXACTLY the introducer set the fold regions must yield to:
+// at a value-position introducer that ends its line (`key:`-EOL, `?`-EOL, `-`-EOL) the indented block
+// is a FRESH dispatch site (routed to the shared top-level dispatch, which the meta.stream wrapper
+// re-anchors per line), NEVER a fold continuation. `structAhead`/`structRelease` (the fold-bounding
+// lookaheads) are spelled from this same `{compactIndicators, keyValueSeparator}` set — so a fold
+// releases at, and never opens past, a value-position. The explicit-key value (`? k:\n  -`) FALLS
+// OUT as one instance: `? k:` is a `?`-led key whose trailing `:` opens a value block, so the
+// explicit-key fold must NOT treat `k` as a foldable scalar (a bare `? a\n  b` fold has no such `:`).
+export interface ValuePosition {
+  introducer: string;   // the structural literal that opens the value block (`:` / `-` / `?`)
+  source: 'keyValueSeparator' | 'compactIndicator';  // which config field the introducer came from
+}
+export function valuePositions(grammar: CstGrammar): ValuePosition[] | null {
+  if (!grammar.indent) return null;
+  const { indentToken } = grammar.indent;
+  const ruleByName = new Map(grammar.rules.map(r => [r.name, r] as const));
+  // The structural introducer literals: the compact indicators (`-`/`?`) and the key/value
+  // separator (`:`) — the single-char literals that, in this family, can precede a nested block.
+  const kvSep = grammar.indent.keyValueSeparator ?? ':';
+  const introSource = new Map<string, 'keyValueSeparator' | 'compactIndicator'>();
+  for (const c of grammar.indent.compactIndicators ?? []) if (c.length === 1) introSource.set(c, 'compactIndicator');
+  if (kvSep.length === 1 && !introSource.has(kvSep)) introSource.set(kvSep, 'keyValueSeparator');
+  if (!introSource.size) return null;
+
+  // Does `e` (a rule body, transitively through refs) reach an `Indent <reaches value-alt> …`?
+  // i.e. an `Indent` token followed in a seq by an element that contains an `alt` (the value/Node
+  // alternation) — the recursive value block. A bounded visited-set guards the rule recursion.
+  const reachesIndentedValue = (e: RuleExpr, seen: Set<string>): boolean => {
+    const containsAlt = (x: RuleExpr, vseen: Set<string>): boolean =>
+      x.type === 'alt' ? true
+      : x.type === 'seq' ? x.items.some(it => containsAlt(it, vseen))
+      : x.type === 'quantifier' || x.type === 'group' || x.type === 'not' ? containsAlt(x.body, vseen)
+      : x.type === 'sep' ? containsAlt(x.element, vseen)
+      : x.type === 'ref' ? (vseen.has(x.name) ? false : (vseen.add(x.name), (() => { const r = ruleByName.get(x.name); return r ? containsAlt(r.body, vseen) : false; })()))
+      : false;
+    const walk = (x: RuleExpr): boolean => {
+      if (x.type === 'seq') {
+        for (let i = 0; i < x.items.length - 1; i++) {
+          const cur = x.items[i];
+          if (cur.type === 'ref' && cur.name === indentToken && containsAlt(x.items[i + 1], new Set())) return true;
+        }
+        return x.items.some(walk);
+      }
+      if (x.type === 'alt') return x.items.some(walk);
+      if (x.type === 'quantifier' || x.type === 'group' || x.type === 'not') return walk(x.body);
+      if (x.type === 'sep') return walk(x.element);
+      if (x.type === 'ref') { if (seen.has(x.name)) return false; seen.add(x.name); const r = ruleByName.get(x.name); return r ? walk(r.body) : false; }
+      return false;
+    };
+    return walk(e);
+  };
+
+  // An introducer `I` is a value-position when some seq has `I` immediately followed by an element
+  // that reaches an indented value block. `I` may be a head literal (`['-', opt(Value)]`,
+  // `['?', opt(MapValue), …]`) or an inner one (the `:` inside an explicit entry's `[…, ':', opt(MapValue)]`).
+  const found = new Set<string>();
+  const visit = (e: RuleExpr): void => {
+    if (e.type === 'seq') {
+      for (let i = 0; i < e.items.length - 1; i++) {
+        const lit = e.items[i];
+        if (lit.type === 'literal' && introSource.has(lit.value) && reachesIndentedValue(e.items[i + 1], new Set())) found.add(lit.value);
+      }
+      e.items.forEach(visit);
+    } else if (e.type === 'alt') e.items.forEach(visit);
+    else if (e.type === 'quantifier' || e.type === 'group' || e.type === 'not') visit(e.body);
+    else if (e.type === 'sep') visit(e.element);
+  };
+  for (const r of grammar.rules) visit(r.body);
+  if (!found.size) return null;
+  // Order: key/value separator first, then compact indicators in declaration order (stable, for
+  // a deterministic emit). The set — not the order — is what the emitter/verifier consume.
+  const order = [kvSep, ...(grammar.indent.compactIndicators ?? [])];
+  return [...found].sort((a, b) => order.indexOf(a) - order.indexOf(b)).map(introducer => ({ introducer, source: introSource.get(introducer)! }));
+}
+
 /**
  * Explicit mapping-key detection (e.g. YAML `? key` / `: value`).
  *
@@ -3265,6 +3363,12 @@ function detectDeclarations(grammar: CstGrammar, tokenNames: Set<string>): DeclI
  * ordinary string. The official grammar paints it as a key (entity.name.tag), so this derives
  * the shape and lets gen-tm emit a contextual rule scoping the scalar right after the
  * indicator as a key.
+ *
+ * detectExplicitKey is a PARTIAL VIEW of `valuePositions` (above): the `?` it finds is exactly the
+ * `?` value-position introducer, here resolved to its key SCOPE + key BODY pattern (the extra facts
+ * the `#explicit-key` match rule needs). It stays a focused helper so the emit site keeps the scope/
+ * body it derives, but the value-position FACT (a `?`-led entry opens an indented value block) is
+ * owned by `valuePositions`, which the fold regions consult so they yield at a `? key:` value site.
  *
  * Signal (all from the grammar, nothing hardcoded):
  *   • the grammar is INDENTATION-mode (`grammar.indent`) — the family this construct lives in;
@@ -5018,6 +5122,33 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       // a real key separator (`http://x` keeps its glued `:` → still plain content). Used as a NEGATIVE
       // lookahead to bound the fold at the first sibling/comment line, matching the parser's foldedPlain.
       const structAhead = `(?:${cmtLit}|${compactAlt}|${flowEx}*?${kvSep}(?:[\\t ]|$))`;
+      // ── VALUE-POSITION guard (the closed transform's hinge) ──
+      // The IR-derived value-positions (valuePositions): the structural introducers (`-`/`?`/`:`) that
+      // open an indented value block. A FOLD region must YIELD at a value-position — the indented block
+      // there is a fresh dispatch site (the shared top-level dispatch, re-anchored per line by the
+      // meta.stream wrapper), never a fold continuation. `structAhead` already encodes that for the
+      // `:` introducer (a `…: ` / `…:`-EOL line ends/never-opens a fold) and the compact `-`/`?` arm.
+      // The one site that still over-claimed was the explicit-key fold: `? k:` is a `?`-led key whose
+      // TRAILING `:` (a value-position) opens a value block, yet the fold treated `k` as a foldable
+      // bare scalar and swallowed the value line `  - x` (depth-sites' explicit-key-value bug). The
+      // guard `keyColonGuard` — derived from the same kvSep value-position introducer — asserts a
+      // plain scalar is NOT a `key:` (i.e. does NOT open a `:` value block); the explicit-key fold opens
+      // only on a plain scalar that passes it, so a bare `? a\n  b` folds the key while `? k:\n  -` /
+      // `? k: v\n    more` route to the shared dispatch / the value-scoped #plain-continuation. Gated on
+      // the kvSep being a derived value-position, so a family without a `:` value-position keeps the old
+      // (unguarded) behaviour. The `key` token's match (`<plain-body>(?=…kvSep…)`) IS this predicate —
+      // a plain scalar that is a mapping key — so the guard is `(?!<key match>)`. It uses the key token's
+      // BLOCK-context body (`tokenBlockPatternSource` — `[^:#\n]`, where `[`/`{` are KEY CONTENT) rather
+      // than the FLOW snapshot `repository['key'].match` here (which excludes `,[]{}`): the explicit-key
+      // value lives in BLOCK context, so a block key WITH a flow char (`? a [a :\n  - x` — the key is the
+      // plain scalar "a [a", value the sequence) must still be recognised as a `key:` value-position. The
+      // flow snapshot would stop the key body at `[` and miss the colon, letting the fold wrongly open.
+      const vps = valuePositions(grammar);
+      const kvSepIsValuePos = !!vps?.some(v => v.source === 'keyValueSeparator');
+      const keyScope = detectExplicitKey(grammar)?.keyScope;
+      const blockKeyTok = grammar.tokens.find(t => t.scope === keyScope && !t.string && t.blockPattern && tokenPatternPrefixBeforeTrailingLookahead(t));
+      const keyBlockMatch = blockKeyTok ? unicodeWidenIdentPattern(tokenBlockPatternSource(blockKeyTok)!) : undefined;
+      const keyColonGuard = (kvSepIsValuePos && keyBlockMatch) ? `(?!${keyBlockMatch})` : '';
       // Value-position lookahead: after the node indent is stripped, the line must carry an INLINE
       // BLOCK plain value — either `<key>: <plain>` (mapping value) or a `-`/`?` indicator + `<plain>`
       // (sequence entry / explicit key). The plain value is confirmed by `(?=plainSrc)`, which only
@@ -5043,7 +5174,16 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       const keyToSep = quotedScalarToks.length
         ? `(?:${quotedScalarToks.join('|')}|${flowEx.slice(0, -1)}${quoteCharCls}])*?`
         : `${flowEx}*?`;
-      const plainVp = `(?:(?:${docAlt})[\\t ]+)?(?:(?:${compactCls}[\\t ]+)+(?:${keyToSep}${kvSep}[\\t ]+)?|${keyToSep}${kvSep}[\\t ]+)(?=${plainSrc})`;
+      // The indicator-led arm (`-`/`?` then a value) and the bare `key:`-led arm. Each ends in a plain
+      // VALUE confirmed by `(?=plainSrc)`. The indicator arm splits at the value-position guard: after
+      // `(?:compactCls[\t ]+)+`, either a `key:` + INLINE plain value (`- a: hello`, the colon group
+      // consumes `:[\t ]+` so the value really is inline), OR a plain value that is NOT itself a `key:`
+      // (`keyColonGuard`). The second sub-arm is what excludes `? k:\n  -` / `? k:\n  ?`: there `k:` is
+      // a `?`-led KEY whose trailing `:` opens a VALUE-POSITION (the value is on the next indented line,
+      // a dispatch site), so `(?!key)` fails and the fold does not open — the indented value-block then
+      // routes to the shared dispatch (the `-`/`?` indicator scoped structurally). The bare `key:` arm
+      // needs `:[\t ]+` (an inline value), so a value-position `key:`-EOL never matches it either.
+      const plainVp = `(?:(?:${docAlt})[\\t ]+)?(?:(?:${compactCls}[\\t ]+)+(?:${keyToSep}${kvSep}[\\t ]+(?=${plainSrc})|(?=${plainSrc})${keyColonGuard})|${keyToSep}${kvSep}[\\t ]+(?=${plainSrc}))`;
       // Header-line token includes: the same shape any plain `key: value` line gets, so the header is
       // scoped identically to the top level (only the CONTINUATION changes). Includes the typed-value
       // tokens (`#num`/`#boolnull`) so a SINGLE-line `a: 1` keeps `constant.numeric`, and the full
@@ -5095,8 +5235,15 @@ export function generateTmLanguage(grammar: CstGrammar, langName: string): TmGra
       const ekFold = detectExplicitKey(grammar);
       if (ekFold && fold.hasDeeper) {
         const ekContRule = { match: '\\G[\\t ]+(?:[^#\\n]|#(?<=[^\\t\\n\\f\\r ]#))*', name: `${ekFold.keyScope}.${langName}` };
+        // Open on a BARE explicit key only: `?` + ws + a plain scalar that is NOT a `key:` (the
+        // `keyColonGuard` value-position bar). `? a\n  b` folds the key "a b" (key-scoped continuation);
+        // `? k:\n  -` and `? k: v\n    more` are value-positions — the `?`-led key's trailing `:` opens
+        // a value block, so this fold yields and the value line routes to the shared dispatch (the `-`
+        // scoped punctuation) / the value-scoped #plain-continuation (`more` → string.unquoted). Before
+        // the guard this region swallowed `? k:`'s value line as the KEY scope (the depth-sites bug);
+        // the guard is the explicit-key instance of "a fold yields to a value-position".
         repository['explicit-key-continuation'] = emitIndentRegion({
-          lookahead: `(?=${escapeRegex(ekFold.indicator)}[\\t ]+(?:${keyToSep}${kvSep}[\\t ]+)?(?=${plainSrc}))`,
+          lookahead: `(?=${escapeRegex(ekFold.indicator)}[\\t ]+(?=${plainSrc})${keyColonGuard})`,
           cont: `\\1[ \\t]+(?!${structAhead})`,
           blankFirst: true,
           patterns: [ekContRule, ...plainHeaderIncs],

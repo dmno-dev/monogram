@@ -102,6 +102,27 @@ const cases: Case[] = [
   // own level's region reclaims it) — distinguished by the rule-stack, not a variable-length lookbehind.
   { state: 'indent stack (deeper-irregular fold)', input: '- - a\n   - b\n', find: '- b', want: 'string',
     notWant: 'punctuation', note: 'deeper-than-inner `- b` should fold into the plain scalar' },
+
+  // ── indent STACK (explicit-key VALUE position): `? k:\n  - x` is `{ {k:[x]}: null }` — the EXPLICIT
+  //    KEY is the mapping `{k:[x]}`, so `k:`'s value is the block sequence `[x]` and the `- ` at column 2
+  //    is a sequence indicator (punctuation), the `? ` likewise a map-key indicator. This is the depth-bug
+  //    CLASS closed by the value-position transform (valuePositions): `? k:` is a `?`-led key whose
+  //    trailing `:` opens a VALUE-POSITION, so the explicit-key / plain folds YIELD (their value-position
+  //    guard `(?!key)` fails on `k:`) and the indented value-block routes to the shared dispatch — the
+  //    indicator is scoped structurally, exactly as at the plain block-mapping value `k:\n  - x` (which
+  //    always worked). Before the transform both lines were swallowed (the explicit-key fold scoped them
+  //    `entity.name.tag`, then the plain fold `string.unquoted`) — neither structural. LOCKED.
+  { state: 'indent stack (explicit-key value)', input: '? k:\n  - x\n', find: '- x', want: 'punctuation',
+    notWant: 'entity.name.tag', note: 'explicit-key value `- x` is a sequence indicator, not a folded key' },
+  { state: 'indent stack (explicit-key value)', input: '? k:\n  ? x\n', find: '? x', want: 'punctuation',
+    notWant: 'entity.name.tag', note: 'explicit-key value `? x` is a map-key indicator, not a folded key' },
+  // counter-proof for the value-position guard: a BARE explicit key (no trailing `:`) MUST still fold as
+  // the KEY (`? a\n  b` = key "a b"), and an explicit key with an INLINE value (`? k: hello\n    more`)
+  // folds `more` as the VALUE (string.unquoted), NOT the key — the fold yields the colon to a value site.
+  { state: 'indent stack (explicit-key bare-fold)', input: '? a\n  b\n', find: 'b', want: 'entity.name.tag',
+    note: 'a bare explicit key `? a\\n  b` folds into the KEY "a b"' },
+  { state: 'indent stack (explicit-key inline-value)', input: '? k: hello\n    more\n', find: 'more', want: 'string',
+    notWant: 'entity.name.tag', note: 'an explicit key inline value folds the continuation as the VALUE, not the key' },
 ];
 
 let pass = 0, knownBugs = 0, regressions = 0;

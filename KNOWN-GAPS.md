@@ -16,25 +16,25 @@ Regenerate: `node test/gap-ledger.ts --write` · verify up-to-date: `node test/g
 
 **3 gaps** across 7 grammars · 0 dropped.
 
-## `0b90a1776868` — yaml: structural-literal→name
+## `3e7e4f47894f` — yaml: #24 structural-literal→content
 
 - **Language:** yaml
-- **Minimal repro:** `? a:\n  -`
+- **Minimal repro:** `? a[:\n  - a\n  -`
 - **Divergent token:** `-` (parser token `$punct`)
-- **Role vs scope:** want **punct**, got **name** (highlighter scope `entity.name.tag.yaml`)
-- **Fingerprint:** `0b90a1776868`
+- **Role vs scope:** want **punct**, got **string** (highlighter scope `string.unquoted.yaml`)
+- **Fingerprint:** `3e7e4f47894f`
 
 ```json
 {
-  "id": "0b90a1776868",
+  "id": "3e7e4f47894f",
   "language": "yaml",
-  "kind": "structural-literal→name",
-  "repro": "? a:\n  -",
+  "kind": "#24 structural-literal→content",
+  "repro": "? a[:\n  - a\n  -",
   "tokenType": "$punct",
   "tokenText": "-",
   "want": "punct",
-  "got": "name",
-  "gotScope": "entity.name.tag.yaml"
+  "got": "string",
+  "gotScope": "string.unquoted.yaml"
 }
 ```
 
