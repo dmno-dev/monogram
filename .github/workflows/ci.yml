@@ -34,38 +34,13 @@ jobs:
           npm run gen
           git diff --exit-code -- '*.tmLanguage.json' '*.language-configuration.json' '*.monarch.json' '*.cst-types.ts' '*.contributes.json' tree-sitter
 
-      # Self-contained suites (each exits non-zero on failure). The conformance /
-      # coverage / bench tools needing the external TypeScript corpus or VS Code's
-      # grammar are excluded; tsx/jsx conformance use only the bundled tsc.
+      # Every correctness GATE through ONE runner — sanity / agnostic / conformance /
+      # highlighter / vue / yaml / the generative scope≡role check / the gap-ledger selftest
+      # + --check (stale KNOWN-GAPS.md fails). One ✓/✗ summary, one exit code. The comparative
+      # METRICS (scope-gap / src-coverage) and BENCH tools need the external TS corpus / VS Code
+      # grammars and run in the readme-bench workflow, not here. See TESTING.md for the taxonomy.
       - name: Test
-        run: |
-          node test/sanity-check.ts
-          node test/agnostic.ts
-          node test/refactor-guard.ts
-          node test/test-issues.ts
-          node test/tm-highlight-guards.ts
-          node test/js-conformance.ts
-          node test/tsx-conformance.ts
-          node test/jsx-conformance.ts
-          node test/redcmd-tm-diagnostics.ts
-          node test/html-lexer-spike.ts
-          node test/html-conformance.ts
-          node test/html-monarch.ts
-          node test/html-embed-js.ts
-          node test/vue-directives.ts
-          node test/vue-embed-boundary.ts
-          node test/vue-interp-expr.ts
-          node test/yaml-issue12-regressions.ts
-          node test/yaml-depth-witnesses.ts
-          node test/generative.ts
-          # The gap ledger is the deterministic, oracle-classified record of the divergences the
-          # generative check DISCOVERS. Its self-test asserts the ddmin keep-path + the oracle
-          # drop-path + determinism; --check fails if the committed KNOWN-GAPS.md is stale (the
-          # ledger is a pure function of the grammar, so it must be regenerated when a grammar
-          # changes — `npm run gap-ledger`). This is the deterministic source of truth; a later
-          # layer can turn rows into issues, but the committed artifact is gated here first.
-          node test/gap-ledger-selftest.ts
-          node test/gap-ledger.ts --check
+        run: npm run check
 
   # The derived tree-sitter highlighter is the strongest thesis proof (a real GLR
   # parser from the same grammar, beating the official hand-written one). Build its
