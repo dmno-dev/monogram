@@ -45,6 +45,12 @@ function readGaps(): Gap[] {
 function gh(args: string[]): string {
   return execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
+// `gh issue create --label X` requires the label to EXIST — create it once (idempotent: ignore the
+// "already exists" error so re-runs are a no-op).
+function ensureLabel(): void {
+  try { gh(['label', 'create', LABEL, '--color', 'D4C5F9', '--description', 'A valid-input flat-highlighter divergence found by the generative gap ledger (auto-filed/closed)']); }
+  catch (e: any) { if (!/already exists/i.test(e?.stderr ?? e?.message ?? '')) throw e; }
+}
 // open `gap-ledger`-labelled issues → their fingerprint (from the body marker) → issue number
 function openIssues(): Map<string, number> {
   const raw = gh(['issue', 'list', '--label', LABEL, '--state', 'open', '--json', 'number,body', '--limit', '500']);
@@ -89,6 +95,7 @@ const toClose = [...existing!.entries()].filter(([id]) => !ledgerIds.has(id));
 
 console.log(`gap ledger: ${gaps.length} gap(s) · open issues: ${existing!.size} · to open: ${toOpen.length} · to close: ${toClose.length}${DRY ? '   [DRY-RUN]' : ''}`);
 
+if (!DRY && toOpen.length) ensureLabel();
 for (const g of toOpen) {
   console.log(`  + OPEN  ${g.id}  ${title(g)}`);
   if (!DRY) { const url = gh(['issue', 'create', '--title', title(g), '--body', body(g), '--label', LABEL]).trim(); console.log(`         → ${url}`); }
