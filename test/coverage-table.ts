@@ -62,8 +62,9 @@ const gapBy = new Map(gapRows.map((x) => [x.lang, x.r]));
 const LANGS = ['TypeScript', 'JavaScript', 'JSX', 'TSX', 'HTML', 'YAML', 'Vue'];
 
 let md = '';
-md += "Per-grammar comparison vs the **official parser** as the neutral oracle (`node test/coverage-table.ts --write`).\n\n**Parser** — Monogram's parser vs the official parser (`test/src-coverage.ts`). **agree** is the closeness number: Monogram and the official parser return the same verdict on each corpus file (both accept / both reject; **structural parse-tree equality** for HTML via parse5). **covered** is the share of the official parser's branches the corpus actually exercises — a blind-spot gauge; Monogram's behaviour on the uncovered remainder is untested, so read `agree` as \"on the `covered` portion.\" For the non-HTML grammars `agree` is accept/reject, *not* tree-equality; their parse-**structure** correctness is exercised instead by the **Highlighter** axis below, whose token roles are read off the parse tree. (Each adapter's detailed output also prints a coverage-weighted branch-alignment %, which is more lenient than `agree`.)\n\n**Highlighter** — Monogram's derived TextMate grammar vs the official one, both graded against the parser's token roles (`test/scope-gap.ts`); the [vscode#203212](https://github.com/microsoft/vscode/issues/203212) comparison.\n\n";
-md += '| Grammar | Parser — agree · covered | Highlighter — Monogram vs official |\n|---|---|---|\n';
+// The legend (agree / covered / Highlighter) is hand-written prose in the README, above the
+  // markers — this region is DATA only, so the narrative can be reworded without a regen.
+  md += '| Grammar | Parser — agree · covered | Highlighter — Monogram vs official |\n|---|---|---|\n';
 for (const lang of LANGS) {
   const c = covBy.get(lang), g = gapBy.get(lang);
   const parser = c ? `${pct(c.agreePct)} · ${pct(c.denoms?.[c.denoms.length - 1]?.completeness)}` : '—';

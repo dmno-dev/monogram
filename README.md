@@ -11,26 +11,6 @@ Write a language's grammar **once**, as an executable definition. Monogram runs 
 - **HTML** ([`html.ts`](html.ts)) — the engine reaching *past token streams into markup*; ~95 lines, validated against [`parse5`](https://github.com/inikulin/parse5).
 - **Vue** ([`vue.ts`](vue.ts)) — a dialect of `html.ts`: SFC blocks that embed Monogram's own TS/JS/CSS, plus directives and `{{ }}` interpolation.
 
-<!-- coverage:start -->
-Per-grammar comparison vs the **official parser** as the neutral oracle (`node test/coverage-table.ts --write`).
-
-**Parser** — Monogram's parser vs the official parser (`test/src-coverage.ts`). **agree** is the closeness number: Monogram and the official parser return the same verdict on each corpus file (both accept / both reject; **structural parse-tree equality** for HTML via parse5). **covered** is the share of the official parser's branches the corpus actually exercises — a blind-spot gauge; Monogram's behaviour on the uncovered remainder is untested, so read `agree` as "on the `covered` portion." For the non-HTML grammars `agree` is accept/reject, *not* tree-equality; their parse-**structure** correctness is exercised instead by the **Highlighter** axis below, whose token roles are read off the parse tree. (Each adapter's detailed output also prints a coverage-weighted branch-alignment %, which is more lenient than `agree`.)
-
-**Highlighter** — Monogram's derived TextMate grammar vs the official one, both graded against the parser's token roles (`test/scope-gap.ts`); the [vscode#203212](https://github.com/microsoft/vscode/issues/203212) comparison.
-
-| Grammar | Parser — agree · covered | Highlighter — Monogram vs official |
-|---|---|---|
-| TypeScript | 97.1% · 76.4% | 99.2% vs 99.3% |
-| JavaScript | 96.3% · 65.5% | 99.0% vs 83.6% |
-| JSX | 97.1% · 52.5% | 94.3% vs 94.3% |
-| TSX | 96.7% · 65.7% | 95.6% vs 95.4% |
-| HTML | 95.3% · 49.3% | 100.0% vs 98.8% |
-| YAML | 100.0% · 73.9% | 100.0% vs 99.5% |
-| Vue | — | 98.8% vs 98.0% |
-<!-- coverage:end -->
-
-<sub>**Which “official” grammar each row compares against:** HTML’s is the unmaintained [`textmate/html.tmbundle`](https://github.com/textmate/html.tmbundle) — the #203212 case Monogram targets. YAML’s is the maintained [RedCMD/YAML-Syntax-Highlighter](https://github.com/RedCMD/YAML-Syntax-Highlighter) that VS Code switched to ([microsoft/vscode#232244](https://github.com/microsoft/vscode/pull/232244)) — so YAML’s gap is Monogram vs a *maintained* grammar, not a dead bundle. JS/TS use Microsoft’s maintained [TypeScript-TmLanguage](https://github.com/microsoft/TypeScript-TmLanguage).</sub>
-
 ## Quick start
 
 Requires Node 24+ (runs `.ts` directly — no build step, no `tsx`).
@@ -60,9 +40,36 @@ Take `typeof x < y`. A regex highlighter has to guess whether `<` opens a generi
 
 That single source reaches across grammars, too: an embedded snippet runs *another Monogram grammar* — a `<script>` body is highlighted by Monogram's own JavaScript, so `<script>const x = 1 < 2</script>` colours `<` as a JS operator, the same ambiguity resolved *inside* the embed. Where VS Code's embeds fray — two independently-written grammars meeting with nothing checking the seam — Monogram owns both sides, so self-verifying that seam becomes possible (a design goal beyond today's standard `contentName` injection).
 
-## Comparison
+## How it measures up
 
-The same question, every language at once: take the bugs reported against each *hand-written* official grammar and ask whether the *derived* grammar solves them. Which does **only** the official solve, which does **only** Monogram solve — and which do **both** still get wrong (the shared frontier neither reaches today)?
+Two numbers answer two different questions — read them together, not against each other:
+
+- **Broad agreement** (the table just below) — over a whole corpus, does the derived grammar match the official **parser**'s accept/reject and the official **highlighter**'s token roles? This is dominated by the easy bulk of unambiguous tokens: the floor every grammar clears, not the interesting part.
+- **The filed bugs** (the ledger under it) — on the exact cases reported against the hand-written official grammar, does the *derived* one fix them? This strips the easy bulk away and shows only the ambiguous frontier — generic-`<`-vs-less-than, regex-vs-division, whitespace-fragile multiline generics — where a parser-derived grammar pulls away from hand-tuned regex.
+
+So the two aren't in tension: a near-tie in the broad table can sit right next to a lopsided ledger — the broad average dilutes the difference with easy tokens, while the ledger zooms in on the hard cases it buries.
+
+### Broad agreement vs the official grammar
+
+**Parser** (Monogram vs the official parser, [`test/src-coverage.ts`](test/src-coverage.ts)) — **agree** = the same accept/reject verdict on each corpus file (for HTML, full **parse-tree equality** via parse5); **covered** = how much of the official parser's own branches the corpus exercises, so read `agree` as "on the covered portion." (For the non-HTML grammars `agree` is accept/reject; their parse-*tree* correctness is exercised by the Highlighter axis, whose roles are read off the tree.) **Highlighter** (Monogram's derived TextMate grammar vs the official one, [`test/scope-gap.ts`](test/scope-gap.ts)) — both graded against the parser's per-token roles, the [vscode#203212](https://github.com/microsoft/vscode/issues/203212) comparison.
+
+<!-- coverage:start -->
+| Grammar | Parser — agree · covered | Highlighter — Monogram vs official |
+|---|---|---|
+| TypeScript | 97.1% · 76.4% | 99.2% vs 99.3% |
+| JavaScript | 96.3% · 65.5% | 99.0% vs 83.6% |
+| JSX | 97.1% · 52.5% | 94.3% vs 94.3% |
+| TSX | 96.7% · 65.7% | 95.6% vs 95.4% |
+| HTML | 95.3% · 49.3% | 100.0% vs 98.8% |
+| YAML | 100.0% · 73.9% | 100.0% vs 99.5% |
+| Vue | — | 98.8% vs 98.0% |
+<!-- coverage:end -->
+
+Measured against the *maintained* official grammar where it matters, not a dead bundle: JS/TS use Microsoft's maintained [TypeScript-TmLanguage](https://github.com/microsoft/TypeScript-TmLanguage); YAML uses the maintained [RedCMD/YAML-Syntax-Highlighter](https://github.com/RedCMD/YAML-Syntax-Highlighter) that VS Code switched to ([microsoft/vscode#232244](https://github.com/microsoft/vscode/pull/232244)); only HTML's baseline is the unmaintained [textmate/html.tmbundle](https://github.com/textmate/html.tmbundle) — the #203212 case Monogram targets.
+
+### Every bug filed against the official grammar
+
+Take the bugs reported against each *hand-written* official grammar and ask whether the *derived* grammar solves them — and which **both** still get wrong (the shared frontier neither reaches today).
 
 <!-- issues:start -->
 <!-- generated by `npm run bench:issues` — do not edit by hand -->
@@ -216,7 +223,7 @@ _No asymmetries — both grammars handle all 8 filed bugs below._
 
 ### The ceiling — and the bar for claiming it
 
-Deriving from a proven parser wins the disambiguation that is *TextMate-expressible but infeasible to hand-write* — regex-vs-division, generic-vs-comparison, whitespace-fragile multiline generics — the **only-Monogram** column. The **both-miss** cases are ones neither grammar gets *today* — not, by default, ones TextMate *can't*.
+The **only-Monogram** wins above are all disambiguations that are *TextMate-expressible but infeasible to hand-write* — a parser supplies the pattern a human can't reliably guess. The **both-miss** cases are ones neither grammar gets *today* — not, by default, ones TextMate *can't*.
 
 "TextMate can't express X" is not a guess or an assertion; it is a claim to be **proven from the model**. TextMate is a line-oriented matcher whose only cross-line memory is a finite stack of scope contexts, so a proof exhibits an X whose correct highlighting provably needs memory that model lacks — unbounded lookback to a token that is not an enclosing context. A failed *attempt* to derive a pattern is not such a proof: a cleverer pattern may exist, and most "impossible for TextMate" folklore is exactly this error — the multiline / nested-generic cases turn out TM-expressible once a parser supplies the pattern, which is why the derived grammar gets them right. Where a construct provably exceeds the model, Monogram's **tree-sitter** target — a real parser over the whole tree — resolves it.
 
@@ -338,7 +345,7 @@ The lexer, CST types, and all three highlighters fall out of step 1; a *dialect*
 
 ## Known differences from the official highlighter
 
-A handful of token patterns are scoped differently from VS Code's official TypeScript grammar — all intentional, and in some Monogram is arguably *more* correct (these are *deliberate divergences*, distinct from the bug-class fixes the [ledger](#comparison) measures):
+A handful of token patterns are scoped differently from VS Code's official TypeScript grammar — all intentional, and in some Monogram is arguably *more* correct (these are *deliberate divergences*, distinct from the bug-class fixes the [ledger](#every-bug-filed-against-the-official-grammar) measures):
 
 | Token | Monogram | Official | Why we keep ours |
 |---|---|---|---|
