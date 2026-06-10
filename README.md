@@ -60,7 +60,7 @@ So the two aren't in tension: a near-tie in the broad table can sit right next t
 | JavaScript | 96.1% · 65.5% | 99.0% vs 83.6% |
 | JSX | 97.1% · 52.5% | 94.3% vs 94.3% |
 | TSX | 96.7% · 65.7% | 95.6% vs 95.4% |
-| HTML | 1.2% · 49.3% | 100.0% vs 98.8% |
+| HTML | 95.3% · 49.3% | 100.0% vs 98.8% |
 | YAML | 100.0% · 73.9% | 100.0% vs 99.5% |
 | Vue | — | 98.8% vs 98.0% |
 <!-- coverage:end -->
