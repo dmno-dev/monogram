@@ -14,6 +14,8 @@ export {
 
 interface TokenOptions {
   skip?: boolean;
+  /** tree-sitter token precedence (`token(prec(N, …))`) — makes this token win the lexer over LONGER lower-precedence tokens. tree-sitter-only; inert for the interpreted parser / TextMate / Monarch. */
+  tsPrec?: number;
   scope?: string;
   escape?: TokenPattern;
   // Highlight-only interpolation regions for ordinary string tokens (e.g. env-spec `${…}` / `$(…)`).
@@ -358,6 +360,8 @@ interface GrammarConfig {
   tokens: Record<string, TokenRef>;
   prec?: PrecLevelDef[];
   ledPrec?: LedPrec[];
+  /** tree-sitter: rule names whose STRUCTURAL token children highlight as plain text. Inert elsewhere. */
+  tsTextRules?: string[];
   rules: Record<string, RuleRef>;
   scopes?: Record<string, string[]>;
   entry: RuleRef;
@@ -393,6 +397,7 @@ export function defineGrammar(config: GrammarConfig): CstGrammar & { name: strin
       pattern: tok.pattern,
       blockPattern: tok.opts.blockPattern,
       blockOnly: tok.opts.blockOnly,
+      tsPrec: tok.opts.tsPrec,
       flags,
       scope: tok.opts.scope,
       escapePattern: tok.opts.escape,
@@ -444,5 +449,5 @@ export function defineGrammar(config: GrammarConfig): CstGrammar & { name: strin
     }
   }
 
-  return { name: config.name, scopeName: config.scopeName, tokens, precs, ledPrecs: config.ledPrec, rules, scopeOverrides, markup: config.markup, indent: config.indent, newline: config.newline, expressionRule: config.expression ? names.get(config.expression) : undefined, aliasScopes: config.aliasScopes, canonicalRepoNames: config.canonicalRepoNames, manifest: config.manifest };
+  return { name: config.name, scopeName: config.scopeName, tokens, precs, ledPrecs: config.ledPrec, rules, scopeOverrides, markup: config.markup, indent: config.indent, newline: config.newline, expressionRule: config.expression ? names.get(config.expression) : undefined, aliasScopes: config.aliasScopes, canonicalRepoNames: config.canonicalRepoNames, manifest: config.manifest, tsTextRules: config.tsTextRules };
 }

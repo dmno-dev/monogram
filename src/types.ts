@@ -46,6 +46,7 @@ export interface TokenDecl {
   // the engine stays agnostic (a grammar declaring none is unaffected). Highlight-only generators
   // ignore it (a `%`-led directive in flow is vanishingly rare and the flat TM grammar is unchanged).
   blockOnly?: boolean;
+  tsPrec?: number;        // tree-sitter token precedence (token(prec(N, …))); tree-sitter-only
 }
 
 /**
@@ -449,6 +450,7 @@ export interface CstGrammar {
   markup?: MarkupConfig;  // opt-in markup-mode tokenization (HTML/Vue); absent for token-stream languages
   indent?: IndentConfig;  // opt-in indentation-sensitive tokenization (YAML); absent → byte-identical token stream
   newline?: NewlineConfig;  // opt-in NEWLINE-sensitive tokenization, independent of indent (no indent stack); absent → byte-identical token stream
+  tsTextRules?: string[];   // tree-sitter: rules whose structural token children highlight as plain text
   expressionRule?: string;  // name of the rule that produces an EXPRESSION; lets gen-tm derive a `#expression` sub-grammar (for expression-only embeds, e.g. Vue `{{ }}`)
   // Extra TextMate grammars that just RE-EXPOSE this one under another scopeName (thin
   // `{scopeName, patterns:[{include: <this.scopeName>}]}` wrappers). HTML declares

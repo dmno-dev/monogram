@@ -28,6 +28,7 @@ const GATES: Gate[] = [
   { group: 'conformance', name: 'tsx', args: ['test/tsx-conformance.ts'] },
   { group: 'conformance', name: 'jsx', args: ['test/jsx-conformance.ts'] },
   { group: 'conformance', name: 'html', args: ['test/html-conformance.ts'] },
+  { group: 'highlighter', name: 'tree-sitter-highlight', args: ['test/tree-sitter-highlight.ts'] },
   { group: 'highlighter', name: 'tm-guards', args: ['test/tm-highlight-guards.ts'] },
   { group: 'highlighter', name: 'tm-diagnostics', args: ['test/redcmd-tm-diagnostics.ts'] },
   { group: 'highlighter', name: 'html-monarch', args: ['test/html-monarch.ts'] },
