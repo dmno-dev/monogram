@@ -533,7 +533,10 @@ function buildTokenBody(name: string, ctx: GrammarJsContext): string | null {
   // Block-only (no `pattern`) and dual tokens both resolve here; YAML is the only grammar with a
   // blockPattern, so every other language is unaffected (byte-identical).
   const src = tok.blockPattern ? tokenPatternSource({ pattern: tok.blockPattern }) : tokenPatternSource(tok);
-  return `token(${jsRegexLiteral(sanitizeTreeSitterRegex(src))})`;
+  const re = jsRegexLiteral(sanitizeTreeSitterRegex(src));
+  // A higher token precedence makes this token win the lexer over a LONGER lower-precedence token
+  // (tree-sitter prefers precedence, then length) — e.g. a tag name beats a text run for `div.card`.
+  return tok.tsPrec !== undefined ? `token(prec(${tok.tsPrec}, ${re}))` : `token(${re})`;
 }
 
 // ── conflicts ────────────────────────────────────────────────────────────────
@@ -1334,7 +1337,9 @@ function scopeToCapture(scope: string): string | null {
     ['entity.name.function.decorator', '@function.macro'],
     ['entity.name.function', '@function'],
     ['entity.name.type', '@type'],
+    ['entity.name.tag', '@tag'],
     ['entity.name', '@constructor'],
+    ['entity.other.attribute-name', '@attribute'],  // markup class/id/attr selectors
     ['entity.other.document', '@punctuation.delimiter'],  // YAML --- / ... markers
     ['entity.other.property', '@property'],
     ['support.type.primitive', '@type.builtin'],
@@ -1493,7 +1498,14 @@ function buildHighlightsScm(
   // These reference the named token rule by its snake name.
   const tokenNodeCaptures: ScmRule[] = [];
   for (const tok of grammar.tokens) {
-    if (tok.identifier) continue; // identifier handled by fallback + keyword lists
+    if (tok.identifier) {
+      // An identifier token with a SEMANTIC scope (a tag/attribute, not a generic variable) gets its
+      // own capture; a plain identifier is left to the @variable fallback below.
+      const isc = tok.scope ? scopeToCapture(tok.scope) : null;
+      if (!isc || isc === '@variable') continue;
+      tokenNodeCaptures.push({ query: `(${ctx.tokenSnake.get(tok.name)!})`, capture: isc });
+      continue;
+    }
     const cap = tokenCapture(tok);
     if (!cap) continue;
     // The interpolated-template token is now a RULE whose literal text is the
@@ -1534,7 +1546,8 @@ function buildHighlightsScm(
   const identSnake = identTok ? ctx.tokenSnake.get(identTok.name)! : null;
 
   // ── Emit identifier fallback FIRST (lowest priority) ──
-  if (identSnake) {
+  const identCap = identTok && identTok.scope ? scopeToCapture(identTok.scope) : null;
+  if (identSnake && (!identCap || identCap === '@variable')) {
     out.push(';; Bare identifier (lowest priority; specific patterns below win).');
     out.push(`(${identSnake}) @variable`);
     out.push('');
@@ -1699,7 +1712,11 @@ function buildHighlightsScm(
 
   out.push(';; Keyword, operator, and punctuation literals.');
   for (const cap of sortedCaps) {
-    const lits = [...captureGroups.get(cap)!].sort((a, b) => b.length - a.length);
+    // A literal that is a flow-collection delimiter is emitted by the external scanner as a HIDDEN
+    // node (`_flow_lparen`) — not queryable as either an anonymous `"("` token or a named node — so
+    // it is omitted (the delimiter highlights as default; the structure is unaffected).
+    const lits = [...captureGroups.get(cap)!].filter(l => !ctx.flowLiteralTokens.has(l)).sort((a, b) => b.length - a.length);
+    if (lits.length === 0) continue;
     if (lits.length === 1) {
       out.push(`${jsString(lits[0])} ${cap}`);
     } else {
@@ -1711,6 +1728,32 @@ function buildHighlightsScm(
     }
   }
   out.push('');
+
+  // ── Context overrides: structural tokens inside a declared TEXT rule are plain text ──
+  // A tag-name-shaped word, a spaced selector, etc. inside an inline-text run is TEXT, not its
+  // structural role. A later pattern overrides the generic capture for that node in this context only.
+  const STRUCTURAL_CAPS = new Set(['@tag', '@attribute', '@type', '@constructor', '@variable', '@property']);
+  for (const rn of (grammar.tsTextRules ?? [])) {
+    const trule = grammar.rules.find(r => r.name === rn);
+    const rsnake = ctx.ruleSnake.get(rn);
+    if (!trule || !rsnake) continue;
+    const toks = new Set<string>();
+    const walkT = (e: RuleExpr | undefined): void => {
+      if (!e) return;
+      if (e.type === 'ref') { if (ctx.tokenNames.has(e.name)) toks.add(e.name); return; }
+      if (e.type === 'seq' || e.type === 'alt') { for (const i of e.items) walkT(i); return; }
+      if (e.type === 'quantifier' || e.type === 'group' || e.type === 'not') return walkT(e.body);
+      if (e.type === 'sep') return walkT(e.element);
+    };
+    walkT(trule.body);
+    const overrides: string[] = [];
+    for (const tn of toks) {
+      const tok = grammar.tokens.find(t => t.name === tn);
+      const cap = tok && tok.scope ? scopeToCapture(tok.scope) : null;
+      if (cap && STRUCTURAL_CAPS.has(cap)) overrides.push(`(${rsnake} (${ctx.tokenSnake.get(tn)!}) @none)`);
+    }
+    if (overrides.length) { out.push(''); out.push(`;; ${rsnake}: structural tokens are plain text here`); overrides.sort(); for (const o of overrides) out.push(o); }
+  }
 
   return out.join('\n');
 }
