@@ -185,6 +185,18 @@ check('monarch: `=` inside the attribute list is a delimiter', mAdj('el(xy=ab) h
 // Over-fire guard: a tag-name-like word that is NOT line-leading (here, after a `(`) must not be
 // taken as a tag — Monarch has no line-start anchor, so the head opens only via the per-line dispatch.
 check('monarch: a tag-name word that is not line-leading is not a tag', mAdj('(zz) word', 'word') !== 'tag');
+// Per-line reset invariant: every flat WITHIN-LINE flow state (value-position,
+// single-line strings, inline template) carries a `$` end-of-line reset, so an
+// unterminated quote in prose (an apostrophe) can't poison following lines.
+// (The behavioral case is pinned downstream against the full NMBL grammar.)
+{
+  const monAdj = generateMonarch(gAdj as any) as { tokenizer: Record<string, unknown[]> };
+  const flat = ['value', 'string_squote', 'string_dquote', 'template', 'exprBody'];
+  const missing = flat.filter(st => Array.isArray(monAdj.tokenizer[st]) &&
+    !(monAdj.tokenizer[st] as unknown[][]).some(r => Array.isArray(r) && r[0] === '$'));
+  check('monarch: every flat within-line flow state resets at end of line', missing.length === 0);
+}
+
 // Baseline: without `adjacent` there is no structured tag-head state — the feature adds the
 // adjacency-aware highlighting (the flat path emits no head structure for these block tokens).
 check('monarch baseline: without `adjacent`, no structured tag-head state is emitted',
