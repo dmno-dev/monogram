@@ -480,6 +480,20 @@ function applyAdjacentTagHeadMonarch(grammar: CstGrammar, tokenizer: Record<stri
   }
   tokenizer['adj_linebody'] = [...oldRoot, ['$', { token: '', next: '@popall' }]];
   tokenizer['root'] = [...leadRules, ['(?=.)', { token: '', next: '@adj_linebody' }]];
+
+  // The flat WITHIN-LINE flow states (value-position, single-line strings, the
+  // inline template state) must also reset at end of line — old-root rules
+  // reach them via `switchTo`, ESCAPING adj_linebody's reset, and in an
+  // indentation language none of them spans lines. Without this an
+  // unterminated quote in prose (an apostrophe in "it's") poisons every
+  // following line as string content. The `…N` nesting variants and the block
+  // comment state legitimately span lines (multi-line attr lists) — untouched.
+  for (const st of ['value', 'string_squote', 'string_dquote', 'template', 'exprBody']) {
+    const rules = tokenizer[st];
+    if (!rules) continue;
+    const hasEol = rules.some(r => Array.isArray(r) && r[0] === '$');
+    if (!hasEol) rules.push(['$', { token: '', next: '@popall' }]);
+  }
 }
 
 
