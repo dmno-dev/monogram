@@ -67,7 +67,7 @@ jobs:
   update-readme:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Node 24+ runs the .ts sources directly (native type stripping) — no build, no tsx.
       - uses: actions/setup-node@v4
