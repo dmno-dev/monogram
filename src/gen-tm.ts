@@ -922,16 +922,17 @@ function detectJsx(grammar: CstGrammar): JsxInfo | null {
   }
   if (!selfCloseTok || !closeTok) return null;
 
-  // Confirm the JSX element production: a `<` literal directly before a rule ref.
+  // Confirm the JSX element production: a `<` literal directly before a rule ref, matched on the
+  // NORMALISED branches so an opt/alt/group factoring of the element production still qualifies.
   let hasElementShape = false;
   const walk = (e: RuleExpr): void => {
-    if (e.type === 'seq') {
-      for (let i = 0; i < e.items.length - 1; i++) {
-        if (e.items[i].type === 'literal' && (e.items[i] as { value: string }).value === '<' &&
-            e.items[i + 1].type === 'ref') hasElementShape = true;
+    for (const items of expandAlts(e)) {
+      for (let i = 0; i < items.length - 1; i++) {
+        if (items[i].type === 'literal' && (items[i] as { value: string }).value === '<' &&
+            items[i + 1].type === 'ref') hasElementShape = true;
       }
-      e.items.forEach(walk);
-    } else if (e.type === 'alt') e.items.forEach(walk);
+    }
+    if (e.type === 'seq' || e.type === 'alt') e.items.forEach(walk);
     else if (e.type === 'quantifier' || e.type === 'group' || e.type === 'not') walk(e.body);
     else if (e.type === 'sep') walk(e.element);
   };
@@ -1090,29 +1091,33 @@ function detectTypeParamConstraintKeywords(grammar: CstGrammar, typeArgRule: str
   };
   for (const rule of grammar.rules) for (const seq of expandAlts(rule.body)) scanForTypeParamSep(seq);
 
-  // In each such rule, find OPTIONAL `[<word-literal>, <ref>]` pairs — the constraint.
-  // The literal must be a WORD (starts with a letter/`_`) so it is `\b`-bounded; a
-  // punctuation lead like `=` (the default) is excluded on purpose (see doc above).
+  // In each such rule, find the constraint keyword: the WORD literal that BEGINS an OPTIONAL
+  // `[keyword, type…]` segment. "Optional" is read structurally from expandAlts(body): the constraint
+  // is exactly the segment by which one branch EXTENDS a prefix-shorter sibling — so `opt(kw, type)`
+  // (a `?` body), a separate alt branch `alt([…, kw, type], […])`, and a `sep`-wrapped type ALL reduce
+  // to "branch B = branch A ++ [kw, …]". The keyword is `B[len(A)]` when it is a word literal. This
+  // reads the OPTIONALITY (the distinguishing fact), so a LEADING modifier (`const`/`in`/`out`, whose
+  // own optionality makes `[name]` vs `[const,name]` — NOT a prefix pair) is not mistaken for it, and a
+  // punctuation lead like `=` (the default) is excluded by the word test.
   const keywords = new Set<string>();
   const isWord = (s: string) => /^[A-Za-z_]/.test(s);
-  const scanConstraint = (expr: RuleExpr): void => {
-    if (expr.type === 'quantifier') {
-      if (expr.kind === '?' && expr.body.type === 'seq') {
-        const its = expr.body.items;
-        if (its.length >= 2 && its[0].type === 'literal' && its[1].type === 'ref') {
-          const lit = (its[0] as { value: string }).value;
-          if (isWord(lit)) keywords.add(lit);
-        }
-      }
-      scanConstraint(expr.body);
-    } else if (expr.type === 'seq' || expr.type === 'alt') {
-      for (const it of (expr as { items: RuleExpr[] }).items) scanConstraint(it);
-    } else if (expr.type === 'group') {
-      scanConstraint((expr as { body: RuleExpr }).body);
-    }
-  };
+  const sig = (e: RuleExpr): string =>
+    e.type === 'literal' ? 'L:' + (e as { value: string }).value
+    : e.type === 'ref' ? 'R:' + (e as { name: string }).name
+    : e.type === 'sep' ? 'S:' + sig((e as { element: RuleExpr }).element)
+    : e.type === 'seq' || e.type === 'alt' ? e.type + '[' + (e as { items: RuleExpr[] }).items.map(sig).join(',') + ']'
+    : e.type === 'quantifier' ? 'Q' + (e as { kind: string }).kind + sig((e as { body: RuleExpr }).body)
+    : (e.type === 'group' || e.type === 'not') ? e.type[0] + sig((e as { body: RuleExpr }).body)
+    : e.type;
   for (const rule of grammar.rules) {
-    if (sepElementRules.has(rule.name)) scanConstraint(rule.body);
+    if (!sepElementRules.has(rule.name)) continue;
+    const branches = expandAlts(rule.body);
+    for (const a of branches) for (const b of branches) {
+      if (b.length <= a.length) continue;
+      if (!a.every((it, i) => sig(it) === sig(b[i]))) continue;   // a is a strict prefix of b
+      const head = b[a.length];
+      if (head.type === 'literal' && isWord((head as { value: string }).value)) keywords.add((head as { value: string }).value);
+    }
   }
   return [...keywords];
 }
@@ -1743,15 +1748,40 @@ function detectAngleBracketCast(grammar: CstGrammar): string | null {
   );
   if (typeRuleNameSet.size === 0) return null;
 
+  const ruleByName = new Map(grammar.rules.map(r => [r.name, r] as const));
+  // a "cast head" is a rule whose EVERY expanded branch is exactly `'<' <typeRef> '>'` — the author
+  // factored the angle-cast prefix into its own rule. Recover the type name (null if not that shape).
+  const castHeadType = (body: RuleExpr): string | null => {
+    const branches = expandAlts(body);
+    if (!branches.length) return null;
+    let ty: string | null = null;
+    for (const items of branches) {
+      if (items.length === 3 && items[0].type === 'literal' && (items[0] as { value: string }).value === '<' &&
+          items[1].type === 'ref' && typeRuleNameSet.has((items[1] as { name: string }).name) &&
+          items[2].type === 'literal' && (items[2] as { value: string }).value === '>') {
+        ty = (items[1] as { name: string }).name;
+      } else return null;
+    }
+    return ty;
+  };
   let found: string | null = null;
   const walkSeq = (items: RuleExpr[]): void => {
-    for (let i = 0; i + 3 < items.length; i++) {
-      const a = items[i], b = items[i + 1], c = items[i + 2], d = items[i + 3];
-      if (a.type === 'literal' && a.value === '<' &&
-          b.type === 'ref' && typeRuleNameSet.has(b.name) &&
-          c.type === 'literal' && c.value === '>' &&
-          d /* an operand follows the cast */) {
-        found = b.name;
+    for (let i = 0; i + 1 < items.length; i++) {
+      const a = items[i];
+      // inline `'<' <type> '>' operand`
+      if (i + 3 < items.length) {
+        const b = items[i + 1], c = items[i + 2], d = items[i + 3];
+        if (a.type === 'literal' && a.value === '<' &&
+            b.type === 'ref' && typeRuleNameSet.has(b.name) &&
+            c.type === 'literal' && c.value === '>' && d /* an operand follows the cast */) {
+          found = b.name;
+        }
+      }
+      // via a cast-head RULE: `[<castHeadRef>, operand]` — the `<…>` is hidden behind the ref boundary,
+      // so resolve it by name (mirrors detectCallExpression reaching its args through a separate rule).
+      if (a.type === 'ref' && ruleByName.has(a.name)) {
+        const ty = castHeadType(ruleByName.get(a.name)!.body);
+        if (ty) found = ty;
       }
     }
   };
@@ -1993,20 +2023,22 @@ function generateTypeCastPattern(
  * identifiers before '(' as entity.name.function.
  */
 function detectCallExpression(grammar: CstGrammar): boolean {
+  const byName = new Map(grammar.rules.map(r => [r.name, r.body]));
+  // A call is a ref (the callee) immediately followed by something that STARTS with `(` — the
+  // arg list. Checking FIRST(next) instead of a literal `(` makes the detection transparent to
+  // factoring: the args may be the literal `(` directly, OR a separate rule (`CallArgs = '(' … ')'`)
+  // referenced after the callee — both have `(` in their FIRST set.
+  const startsWithParen = (e: RuleExpr) => firstLiterals(e, byName).has('(');
   function checkSeq(items: RuleExpr[]): boolean {
     for (let i = 0; i < items.length - 1; i++) {
-      if (items[i].type === 'ref' &&
-          items[i + 1].type === 'literal' &&
-          (items[i + 1] as { value: string }).value === '(') {
-        return true;
-      }
+      if (items[i].type === 'ref' && startsWithParen(items[i + 1])) return true;
     }
     return false;
   }
 
   function walk(expr: RuleExpr): boolean {
-    if (expr.type === 'seq') return checkSeq(expr.items) || expr.items.some(walk);
-    if (expr.type === 'alt') return expr.items.some(walk);
+    if (expandAlts(expr).some(checkSeq)) return true;   // normalized factorings (opt/alt/group)
+    if (expr.type === 'seq' || expr.type === 'alt') return expr.items.some(walk);
     if (expr.type === 'quantifier' || expr.type === 'group') return walk(expr.body);
     if (expr.type === 'sep') return walk(expr.element);
     return false;
@@ -2042,10 +2074,10 @@ function detectPropertyAccess(
   }
 
   function walk(expr: RuleExpr): void {
-    if (expr.type === 'seq') { checkSeq(expr.items); expr.items.forEach(walk); }
-    if (expr.type === 'alt') expr.items.forEach(walk);
-    if (expr.type === 'quantifier' || expr.type === 'group') walk(expr.body);
-    if (expr.type === 'sep') walk(expr.element);
+    for (const items of expandAlts(expr)) checkSeq(items);   // normalized factorings
+    if (expr.type === 'seq' || expr.type === 'alt') expr.items.forEach(walk);
+    else if (expr.type === 'quantifier' || expr.type === 'group') walk(expr.body);
+    else if (expr.type === 'sep') walk(expr.element);
   }
 
   for (const rule of grammar.rules) walk(rule.body);
@@ -2072,8 +2104,8 @@ function detectBareArrowParam(grammar: CstGrammar, tokenNames: Set<string>): boo
   }
 
   function walk(expr: RuleExpr): boolean {
-    if (expr.type === 'seq') return checkSeq(expr.items) || expr.items.some(walk);
-    if (expr.type === 'alt') return expr.items.some(walk);
+    if (expandAlts(expr).some(checkSeq)) return true;   // normalized factorings (opt-tail / alt / group)
+    if (expr.type === 'seq' || expr.type === 'alt') return expr.items.some(walk);
     if (expr.type === 'quantifier' || expr.type === 'group') return walk(expr.body);
     if (expr.type === 'sep') return walk(expr.element);
     return false;
@@ -2105,8 +2137,8 @@ function detectParenArrowParams(grammar: CstGrammar): boolean {
   }
 
   function walk(expr: RuleExpr): boolean {
-    if (expr.type === 'seq') return checkSeq(expr.items) || expr.items.some(walk);
-    if (expr.type === 'alt') return expr.items.some(walk);
+    if (expandAlts(expr).some(checkSeq)) return true;   // normalized factorings (opt-tail / alt / group)
+    if (expr.type === 'seq' || expr.type === 'alt') return expr.items.some(walk);
     if (expr.type === 'quantifier' || expr.type === 'group') return walk(expr.body);
     if (expr.type === 'sep') return walk(expr.element);
     return false;
@@ -2152,8 +2184,8 @@ function detectArrowParamDelims(grammar: CstGrammar): { open: string; close: str
     return false;
   }
   function walk(expr: RuleExpr): boolean {
-    if (expr.type === 'seq') return checkSeq(expr.items) || expr.items.some(walk);
-    if (expr.type === 'alt') return expr.items.some(walk);
+    if (expandAlts(expr).some(checkSeq)) return true;   // normalized factorings (opt-tail / alt / group)
+    if (expr.type === 'seq' || expr.type === 'alt') return expr.items.some(walk);
     if (expr.type === 'quantifier' || expr.type === 'group') return walk(expr.body);
     if (expr.type === 'sep') return walk(expr.element);
     return false;
@@ -2181,9 +2213,13 @@ function detectTernary(grammar: CstGrammar): boolean {
     return false;
   }
 
+  // Match on the NORMALIZED forms (expandAlts canonicalises equivalent factorings — an
+  // `opt('?', $, ':', $)` tail, an alt-split, a group — into the same flat adjacency), plus a
+  // recurse into `sep` elements (expandAlts treats `sep` as opaque). So a ternary written any of
+  // those equivalent ways is detected, not only the one flat 5-window factoring.
   function walk(expr: RuleExpr): boolean {
-    if (expr.type === 'seq') return checkSeq(expr.items) || expr.items.some(walk);
-    if (expr.type === 'alt') return expr.items.some(walk);
+    if (expandAlts(expr).some(checkSeq)) return true;
+    if (expr.type === 'seq' || expr.type === 'alt') return expr.items.some(walk);
     if (expr.type === 'quantifier' || expr.type === 'group') return walk(expr.body);
     if (expr.type === 'sep') return walk(expr.element);
     return false;
@@ -2232,8 +2268,10 @@ function detectConditionalType(grammar: CstGrammar): string | null {
 
   function walk(expr: RuleExpr): void {
     if (connector) return;
-    if (expr.type === 'seq') { checkSeq(expr.items); expr.items.forEach(walk); }
-    else if (expr.type === 'alt') expr.items.forEach(walk);
+    // run the 7-window over the NORMALISED branches (mirrors detectTernary): expandAlts
+    // canonicalises an opt-tail / grouped / alt-split conditional `?:` into the flat adjacency.
+    for (const items of expandAlts(expr)) { checkSeq(items); if (connector) return; }
+    if (expr.type === 'seq' || expr.type === 'alt') expr.items.forEach(walk);
     else if (expr.type === 'quantifier' || expr.type === 'group') walk(expr.body);
     else if (expr.type === 'sep') walk(expr.element);
   }
@@ -2276,9 +2314,10 @@ function detectDirectParamKeywords(
   }
 
   function walk(expr: RuleExpr): void {
-    if (expr.type === 'seq') { checkSeq(expr.items); expr.items.forEach(walk); }
-    if (expr.type === 'alt') expr.items.forEach(walk);
-    if (expr.type === 'quantifier' || expr.type === 'group') walk(expr.body);
+    for (const items of expandAlts(expr)) checkSeq(items);   // normalized factorings
+    if (expr.type === 'seq' || expr.type === 'alt') expr.items.forEach(walk);
+    else if (expr.type === 'quantifier' || expr.type === 'group') walk(expr.body);
+    else if (expr.type === 'sep') walk(expr.element);
   }
 
   for (const rule of grammar.rules) walk(rule.body);
@@ -3089,27 +3128,51 @@ interface DeclInfo {
 }
 
 function isAngleBracketSepRule(body: RuleExpr): boolean {
-  if (body.type !== 'seq' || body.items.length !== 3) return false;
-  const [first, second, third] = body.items;
-  return first.type === 'literal' && first.value === '<' &&
-         second.type === 'sep' && second.delimiter === ',' &&
-         third.type === 'literal' && third.value === '>';
+  // Match on the NORMALIZED forms so an equivalent factoring — a trailing `opt(',')`, an
+  // alt-split, a group wrapper — reduces to the same `'<' sep '>'` adjacency. expandAlts keeps
+  // `sep` opaque (it is in its default case), so the sep node survives the expansion.
+  return expandAlts(body).some(items => {
+    if (items.length !== 3) return false;
+    const [first, second, third] = items;
+    return first.type === 'literal' && first.value === '<' &&
+           second.type === 'sep' && second.delimiter === ',' &&
+           third.type === 'literal' && third.value === '>';
+  });
 }
 
 function getTypeParamElementKeywords(body: RuleExpr, grammar: CstGrammar): string[] {
-  if (body.type !== 'seq' || body.items.length !== 3) return [];
-  const sep = body.items[1];
-  if (sep.type !== 'sep') return [];
-  let elementBody: RuleExpr = sep.element;
+  // Find the `'<' sep '>'` adjacency in any NORMALISED branch (so a trailing `opt(',')` or an
+  // alt-wrapped body still surfaces it — the same expansion isAngleBracketSepRule uses), then hoist
+  // the element's keywords. Without this the keyword sub-pattern (the `\bextends\b` scoping inside
+  // `<…>`) is dropped for those equivalent factorings even though the region itself is still emitted.
+  let elementBody: RuleExpr | null = null;
+  for (const items of expandAlts(body)) {
+    const i = items.findIndex(x => x.type === 'literal' && (x as { value: string }).value === '<');
+    if (i >= 0 && items[i + 1]?.type === 'sep' && items[i + 2]?.type === 'literal' && (items[i + 2] as { value: string }).value === '>') {
+      elementBody = (items[i + 1] as { element: RuleExpr }).element; break;
+    }
+  }
+  if (!elementBody) return [];
   if (elementBody.type === 'ref') {
     const rule = grammar.rules.find(r => r.name === (elementBody as { name: string }).name);
     if (rule) elementBody = rule.body;
   }
   const keywords: string[] = [];
   function walk(e: RuleExpr) {
-    if (e.type === 'literal' && isKeywordLiteral(e.value)) keywords.push(e.value);
+    // collect a literal the element CONSUMES that bears a scope obligation: a keyword, OR any
+    // literal the grammar declares a scope for (e.g. a `&` separator scoped punctuation.separator)
+    // — so a declared-scope PUNCTUATION inside the element keeps its scope inside `<…>` too, not
+    // only keywords. The emit site picks the right boundary (`\b` for words, none for punctuation).
+    if (e.type === 'literal' && (isKeywordLiteral(e.value) || grammar.scopeOverrides.has(e.value))) keywords.push(e.value);
     if (e.type === 'seq' || e.type === 'alt') e.items.forEach(walk);
     if (e.type === 'quantifier' || e.type === 'group') walk(e.body);
+    // A keyword reached through a `sep` sub-list of the element is just as direct as one in a
+    // seq/alt — recurse into its element so it is hoisted too (e.g. a type-param whose constraint
+    // is a `&`-separated list carrying a keyword). `not` stays omitted on purpose: a literal under
+    // a negative lookahead is a forbidden word, not present at the site, so it bears no scope; and
+    // `ref` stays unresolved (like collectLiterals) so a constraint TYPE's own keywords — `keyof`,
+    // `typeof` — are NOT mis-hoisted to type-parameter keyword scope.
+    if (e.type === 'sep') walk(e.element);
   }
   walk(elementBody);
   return [...new Set(keywords)];
@@ -3129,13 +3192,15 @@ function detectDeclarations(grammar: CstGrammar, tokenNames: Set<string>): DeclI
   function isBlockRule(name: string): boolean {
     const rule = grammar.rules.find(r => r.name === name);
     if (!rule) return false;
-    const body = rule.body;
-    if (body.type === 'seq' && body.items.length >= 2) {
-      return body.items[0].type === 'literal' && (body.items[0] as { value: string }).value === '{' &&
-             body.items[body.items.length - 1].type === 'literal' &&
-             (body.items[body.items.length - 1] as { value: string }).value === '}';
-    }
-    return false;
+    // A rule is a block body only if EVERY normalised branch is `{ … }`-bounded — i.e. it is
+    // ALWAYS a brace block. `.some` would over-match a rule that is only SOMETIMES a block (a
+    // `Type` whose value can be an inline object type), mis-classifying a `type X = …` alias as a
+    // brace-body declaration. `.every` recovers the alt-of-blocks factoring without that regression.
+    const branches = expandAlts(rule.body);
+    return branches.length > 0 && branches.every(items =>
+      items.length >= 2 &&
+      items[0].type === 'literal' && (items[0] as { value: string }).value === '{' &&
+      items[items.length - 1].type === 'literal' && (items[items.length - 1] as { value: string }).value === '}');
   }
 
   function containsLiteral(expr: RuleExpr, value: string): boolean {
@@ -3150,6 +3215,7 @@ function detectDeclarations(grammar: CstGrammar, tokenNames: Set<string>): DeclI
     if (expr.type === 'ref') return isBlockRule(expr.name);
     if (expr.type === 'seq' || expr.type === 'alt') return expr.items.some(containsBlockRef);
     if (expr.type === 'quantifier' || expr.type === 'group') return containsBlockRef(expr.body);
+    if (expr.type === 'sep') return containsBlockRef(expr.element);
     return false;
   }
 
@@ -3589,10 +3655,13 @@ function detectBlockSequence(grammar: CstGrammar): { indicator: string } | null 
   let indicator: string | null = null;
   const visit = (e: RuleExpr): void => {
     if (e.type === 'seq') {
-      // `[item, (Newline item)*]`: first element + a `*`/`+` over a `[Newline, item]` seq
-      if (e.items.length >= 2) {
-        const head = e.items[0];
-        const q = e.items[1];
+      // `[…, item, (Newline item)*, …]`: an item ADJACENT to a `*`/`+` over a `[Newline, item]` seq.
+      // Scanned pairwise (any k, not only items[0]/items[1]) so a leading element before the
+      // sequence pattern does not hide it. NOT routed through expandAlts on purpose — that would
+      // expand the `(Newline item)*` quantifier this match depends on.
+      for (let k = 0; k + 1 < e.items.length; k++) {
+        const head = e.items[k];
+        const q = e.items[k + 1];
         if (q.type === 'quantifier' && (q.kind === '*' || q.kind === '+') && q.body.type === 'seq'
           && q.body.items.length >= 2 && q.body.items[0].type === 'ref' && q.body.items[0].name === newlineToken) {
           const ind = itemIndicator(head);
@@ -6523,12 +6592,15 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
         { include: '#declaration-type-params' },
       ];
       for (const kw of allTypeParamKws) {
+        // `=` and `,` are the type-param's STRUCTURAL punctuation, emitted by the dedicated
+        // handlers below — skip them here so they are not double-emitted.
+        if (kw === '=' || kw === ',') continue;
         const scope = getScope(scopeOverrides,kw);
         if (scope) {
-          tpInner.push({
-            match: `\\b${escapeRegex(kw)}\\b`,
-            name: `${scope}.${langName}`,
-          });
+          // a word literal is `\b`-bounded; a punctuation literal (e.g. `&`) must NOT be — `\b&\b`
+          // never matches. Pick the boundary by the literal's class.
+          const m = isKeywordLiteral(kw) ? `\\b${escapeRegex(kw)}\\b` : escapeRegex(kw);
+          tpInner.push({ match: m, name: `${scope}.${langName}` });
         }
       }
       tpInner.push({ include: '#type-inner' });
@@ -6660,9 +6732,21 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
             // enum-body is the same `{ … }` bracket region; only its body differs (members are
             // NAMES via #enum-member, not statements). CALLER predicate: a brace-bodied decl
             // whose keyword scope ends in `.enum`.
+            //
+            // A member INITIALIZER may itself contain a nested `{…}` (an object literal,
+            // `A = { x: 1 }`). Like every brace region (see #code-block / #declaration-body),
+            // the body must consume an inner balanced `{…}` as a UNIT, or the inner `}` matches
+            // this region's `end: \}` and prematurely closes the enum body — leaking the
+            // following members out of enum scope (`B` reads as a plain variable, not an
+            // enummember). The nested brace is NOT another enum body but an ordinary
+            // expression-context block, so the balancing recurse target is `#code-block`
+            // (a self-balancing `{}` with no member-name scoping), listed FIRST so an inner
+            // `{` opens it before `#enum-member`/`$self` can mis-handle the brace. `#code-block`
+            // is emitted unconditionally above whenever any declaration exists, so it is always
+            // present here.
             repository['enum-body'] = emitBracketRegion({
               openLit: '\\{', closeLit: '\\}', beginCapName: blockCapName, endCapName: blockCapName,
-              bodyPatterns: [{ include: '#enum-member' }, { include: '$self' }],
+              bodyPatterns: [{ include: '#code-block' }, { include: '#enum-member' }, { include: '$self' }],
             });
           }
           innerPatterns.push({ include: '#enum-body' });
@@ -7788,6 +7872,34 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
       // lookahead. The rest of the group keeps the unconditional flat match.
       const ctxModKws = kws.filter(k => contextualModifiers.has(k) && !alwaysBeforeString(k) && !ctxOpSet.has(k));
       const ctxModSet = new Set(ctxModKws);
+      // Contextual DECLARATION keywords: a `storage.type.*` keyword whose keyword role
+      // is owned by a positional `*-declaration` rule (it appears in
+      // `declarationKeywords`) AND which is non-reserved (the grammar proves it a valid
+      // identifier somewhere — no not()-guard forbids it). Such a word doubles as a
+      // property-access BASE: `module.exports`, `namespace.foo`, `type.foo`,
+      // `interface.foo` — there the word is an ordinary identifier, NOT the namespace/
+      // type-alias keyword. The declaration rule already paints the keyword use
+      // positionally (`module X {}`, `type X = …`, even the string-named `module "x"
+      // {}` / `declare module "foo"` forms — those reach the keyword scope only through
+      // the flat match), so the flat match must ABSTAIN exactly when the word is
+      // immediately followed by a member accessor (`.`/`?.`); the word then falls
+      // through to identifier/property scoping. A declaration head always puts
+      // whitespace + a name/string/`{` after the keyword (never `.`/`?.`), so the guard
+      // never suppresses a real declaration — every form, including the string-named
+      // and `import`/`export type` modifier uses, keeps its scope (they are not
+      // accessor-adjacent). Unlike the support.class abstain below, NO call `(` is
+      // excluded: a declaration keyword is never call-adjacent, and the witness/official
+      // guard is the `.`-adjacency. Mirrors the official grammar's `(?<!\.)` keyword
+      // guard. Keyed on the scope family + the declaration-rule/reserved sets, never on
+      // a specific word.
+      const accessorOpeners = [
+        propAccess.hasDot ? '\\.' : undefined,
+        propAccess.hasOptionalChain ? '\\?\\.' : undefined,
+      ].filter((x): x is string => !!x);
+      const ctxDeclKws = (scope === 'storage.type' || scope.startsWith('storage.type.')) && accessorOpeners.length > 0
+        ? kws.filter(k => declarationKeywords.has(k) && !reservedWordsForCtx.has(k) && !alwaysBeforeString(k) && !ctxOpSet.has(k) && !ctxModSet.has(k))
+        : [];
+      const ctxDeclSet = new Set(ctxDeclKws);
       // Drop keywords whose keyword role is owned by a dedicated declaration context
       // (e.g. `constructor` → #constructor-declaration in class bodies). They double
       // as identifiers everywhere else, so the flat match must not paint them.
@@ -7795,7 +7907,7 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
       // scoped positionally by #import-export-all — never in the flat match, which
       // would mis-paint their ordinary-identifier uses (`const defer`, `defer()`,
       // `import defer from "m"`).
-      const globalKws = kws.filter(k => !alwaysBeforeString(k) && !ctxOpSet.has(k) && !ctxModSet.has(k) && !contextDeclaredKws.has(k) && !phaseModifierKws.has(k));
+      const globalKws = kws.filter(k => !alwaysBeforeString(k) && !ctxOpSet.has(k) && !ctxModSet.has(k) && !ctxDeclSet.has(k) && !contextDeclaredKws.has(k) && !phaseModifierKws.has(k));
       if (globalKws.length > 0) {
         // A `support.class` group names BUILTIN CLASS/TYPE identifiers (Object, Array,
         // Promise, …) — but, unlike a true keyword, those words also appear as runtime
@@ -7851,6 +7963,18 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
           name: `${scope}.${langName}`,
         };
         topPatterns.push({ include: `#${mkey}` });
+      }
+      // Contextual declaration keywords (see ctxDeclKws above): one accessor-guarded
+      // entry, placed at the same position as the flat group so a real declaration-head
+      // keyword still wins, while a `.`/`?.`-adjacent property-access base falls through
+      // to identifier/property scoping.
+      if (ctxDeclKws.length > 0) {
+        const dkey = `${key}-decl`;
+        repository[dkey] = {
+          match: `\\b(${ctxDeclKws.map(escapeRegex).join('|')})\\b(?!\\s*(?:${accessorOpeners.join('|')}))`,
+          name: `${scope}.${langName}`,
+        };
+        topPatterns.push({ include: `#${dkey}` });
       }
       for (const kw of beforeStringKws) {
         const ckey = `${key}-${kw.replace(/[^a-z0-9]/gi, '')}`;
