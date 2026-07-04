@@ -24,7 +24,7 @@ interface TokenOptions {
   // Generators emit a to-EOL region in the token's comment scope so prose dims; `richStarters`
   // lists tokens that keep full token highlighting when one opens the comment body
   // (e.g. env-spec `# @decorator(...)`). See TokenDecl.lineComment.
-  lineComment?: { richStarters?: TokenRef[] };
+  lineComment?: { richStarters?: TokenRef[]; continuationBrackets?: [string, string][] };
   // A regex matching exactly one well-formed escape sequence. Engine-scanned tokens
   // (templates) validate each `\`-escape against it and reject any that don't match —
   // unlike `escape` (highlight-only), this drives tokenization. Skipped in tag
@@ -561,6 +561,7 @@ export function defineGrammar(config: GrammarConfig): CstGrammar & { name: strin
             if (!refName) throw new Error(`lineComment.richStarters on token '${name}' references an undeclared token`);
             return refName;
           }),
+          continuationBrackets: tok.opts.lineComment.continuationBrackets?.map((pair) => [...pair] as [string, string]),
         }
         : undefined,
       embed: tok.opts.embed,

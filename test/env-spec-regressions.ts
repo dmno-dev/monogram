@@ -136,6 +136,40 @@ const check = (label: string, cond: boolean) => {
   }
   check('parser: lineComment metadata does not change parsing', !threw);
 
+  // continuationBrackets: a bracket left open in a rich comment continues the construct
+  // across introducer-prefixed lines via nested begin/end regions
+  const HASH_ML = token(seq(notPrecededBy(noneOf(' ', '\t', '\n', '\r')), '#'), {
+    scope: 'comment.line',
+    lineComment: { richStarters: [DEC_NAME], continuationBrackets: [['(', ')'], ['[', ']']] },
+  });
+  const CommentMl = rule(() => [[HASH_ML, many(Part)]]);
+  const FileMl = rule(() => [[many(CommentMl)]]);
+  const mlGrammar = defineGrammar({
+    name: 'env-spec-ml',
+    tokens: { WS, HASH_ML, DEC_NAME, KEY, TEXT },
+    rules: { Part, CommentMl, FileMl },
+    entry: FileMl,
+  });
+  const tmMl = generateTmLanguage(mlGrammar);
+  const parenKey = Object.keys(tmMl.repository).find((k) => k.startsWith('hash_ml-rich-cont-') && tmMl.repository[k].begin === '\\(');
+  check('tm: continuation bracket pair emits a begin/end region', !!parenKey && tmMl.repository[parenKey!].end === '\\)');
+  const parenRegion = parenKey ? tmMl.repository[parenKey] : undefined;
+  const parenIncludes = (parenRegion?.patterns ?? []).map((pp) => (pp as { include?: string }).include);
+  check('tm: construct interior tries marker, embedded comment, nested brackets, then $self',
+    parenIncludes[0] === '#hash_ml-rich-cont-marker'
+    && parenIncludes[1] === '#hash_ml-rich-cont-comment'
+    && parenIncludes.includes('$self')
+    && parenIncludes.filter((n) => n?.startsWith('#hash_ml-rich-cont-') && n !== '#hash_ml-rich-cont-marker' && n !== '#hash_ml-rich-cont-comment').length === 2);
+  const marker = tmMl.repository['hash_ml-rich-cont-marker'];
+  check('tm: continuation marker is line-anchored and scoped as comment punctuation',
+    typeof marker?.match === 'string' && marker.match.startsWith('^[ \\t]*')
+    && JSON.stringify(marker?.captures?.['1']?.name ?? '').includes('punctuation.definition.comment'));
+  const embedded = tmMl.repository['hash_ml-rich-cont-comment'];
+  check('tm: embedded comment inside a construct dims to end-of-line', embedded?.end === '$' && Array.isArray(embedded?.patterns) && embedded.patterns.length === 0);
+  const richMl = tmMl.repository['hash_ml-rich'];
+  const richIncludes = (richMl?.patterns ?? []).map((pp) => (pp as { include?: string }).include);
+  check('tm: rich region tries construct brackets before $self', richIncludes[richIncludes.length - 1] === '$self' && richIncludes.length === 3);
+
   // a comment token WITHOUT the metadata still emits the flat rule (no behavior change)
   const HASH2 = token(seq(notPrecededBy(noneOf(' ', '\t', '\n', '\r')), '#'), { scope: 'comment.line' });
   const Comment2 = rule(() => [[HASH2, many(TEXT)]]);

@@ -5034,12 +5034,54 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
         .filter((t): t is TokenDecl => !!t);
       if (richStarters.length) {
         const startLookahead = richStarters.map((t) => `(?:${tokenPatternSource(t)})`).join('|');
+        // ── Multi-line constructs (`continuationBrackets`) ──
+        // A bracket left open in a rich comment continues the construct across consecutive
+        // introducer-prefixed lines (`# @import(` … `#   KEY1,` … `# )`). Each pair becomes a
+        // begin/end region nested INSIDE the line-scoped rich region — a TextMate child region
+        // suspends its parent's `$` end, so the construct spans lines while the parent still
+        // closes single-line comments. Inside a construct:
+        //   - a line-start introducer is a CONTINUATION MARKER (comment punctuation, not a new
+        //     comment) — matched first (anchored `^`, earliest-match wins);
+        //   - any other introducer opens an embedded comment to end-of-line that dims
+        //     (`#   KEY1, # note`), popping at `$` so the construct resumes next line;
+        //   - brackets nest recursively; everything else highlights via $self.
+        // An unclosed bracket runs the region to the next closer (the same hazard every
+        // hand-written TextMate grammar with multi-line constructs has) — the parser is the
+        // authority on validity, the highlighter degrades soft.
+        const contBrackets = tok.lineComment.continuationBrackets ?? [];
+        const bracketKeyOf = (open: string) => `${key}-rich-cont-${[...open].map((c) => c.charCodeAt(0).toString(16)).join('')}`;
+        const bracketIncludes = contBrackets.map(([open]) => ({ include: `#${bracketKeyOf(open)}` }));
+        if (contBrackets.length) {
+          repository[`${key}-rich-cont-marker`] = {
+            match: `^[ \\t]*(${introducer})`,
+            captures: { '1': { name: `${scope}.${langName} ${commentPunct}` } },
+          };
+          repository[`${key}-rich-cont-comment`] = {
+            name: `${scope}.${langName}`,
+            begin: `(${introducer})`,
+            beginCaptures: { '1': { name: commentPunct } },
+            end: '$',
+            patterns: [],
+          };
+          for (const [open, close] of contBrackets) {
+            repository[bracketKeyOf(open)] = {
+              begin: escapeRegex(open),
+              end: escapeRegex(close),
+              patterns: [
+                { include: `#${key}-rich-cont-marker` },
+                { include: `#${key}-rich-cont-comment` },
+                ...bracketIncludes,
+                { include: '$self' },
+              ],
+            };
+          }
+        }
         repository[`${key}-rich`] = {
           name: `${scope}.${langName}`,
           begin: `(${introducer})(?=[ \\t]*(?:${startLookahead}))`,
           beginCaptures: { '1': { name: commentPunct } },
           end: '$',
-          patterns: [{ include: '$self' }],
+          patterns: [...bracketIncludes, { include: '$self' }],
         };
         topPatterns.push({ include: `#${key}-rich` });
       }

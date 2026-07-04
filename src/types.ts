@@ -30,7 +30,12 @@ export interface TokenDecl {
   // `richStarters` names tokens that keep FULL token highlighting when one of them (after
   // optional blanks) opens the comment body (`# @decorator(...)`). The lexer/parser are
   // unaffected — exactly like `interpolation`, this is generator metadata.
-  lineComment?: { richStarters?: string[] };
+  // `continuationBrackets`: bracket pairs that, when left OPEN inside a rich comment, continue
+  // the construct across consecutive introducer-prefixed lines (env-spec multi-line decorator
+  // calls/literals — `# @import(` … `#   KEY1,` … `# )`). Each opens a begin/end region that
+  // outlives the line-scoped comment region (a TextMate child region suspends its parent's end),
+  // with the line-start introducer scoped as a continuation marker rather than a new comment.
+  lineComment?: { richStarters?: string[]; continuationBrackets?: [string, string][] };
   escapeValidPattern?: TokenPattern; // one well-formed escape; engine-scanned tokens reject non-matching `\`-escapes (skipped in tag position)
   embed?: string;         // @embed(lang) — embedded language scope name
   // ── Lexer hints (keep the engine language-agnostic; all optional) ──
