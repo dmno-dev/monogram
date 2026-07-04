@@ -8,6 +8,7 @@
 import { createParser } from '../src/gen-parser.ts';
 import { defineGrammar, many, opt, rule, token, seq, star, altPattern, oneOf, noneOf, anyChar, never, range, plus, followedBy, notPrecededBy } from '../src/api.ts';
 import { generateTmLanguage } from '../src/gen-tm.ts';
+import { generateTreeSitter } from '../src/gen-treesitter.ts';
 
 let ok = 0;
 let fail = 0;
@@ -82,6 +83,11 @@ const check = (label: string, cond: boolean) => {
   }
   check('parser: multiline inline quoted value is accepted without blockScalar', !threw);
 }
+
+// ---------------------------------------------------------------------------
+// Regression 4 (declared below regression 3's grammar pieces): contextualScopes +
+// lineComment.markup — context-dependent token scopes and declared comment markup.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Regression 3: a line-comment INTRODUCER token (`lineComment` metadata) emits
@@ -177,6 +183,72 @@ const check = (label: string, cond: boolean) => {
   const flatGrammar = defineGrammar({ name: 'no-metadata', tokens: { HASH2, TEXT }, rules: { Comment2, File2 }, entry: File2 });
   const tm2 = generateTmLanguage(flatGrammar);
   check('tm: without lineComment metadata the comment token stays a flat match', typeof tm2.repository.hash2?.match === 'string' && tm2.repository.hash2?.begin === undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Regression 4: contextualScopes — token T carries scope S within rule R.
+//   tm: overrides apply inside derived construct regions (call args + continuation
+//       brackets); flat top-level rules keep the declared scope.
+//   tree-sitter: exact `(rule (token) @capture)` queries, emitted last (last-wins).
+// Plus lineComment.markup: declared doc-markup patterns inside plain comment bodies.
+// ---------------------------------------------------------------------------
+{
+  const hspace = oneOf(' ', '\t');
+  const alpha = oneOf(range('a', 'z'), range('A', 'Z'));
+  const WS = token(plus(hspace), { skip: true, scope: 'meta.whitespace' });
+  const DEC_NAME = token(seq('@', plus(alpha)), { scope: 'variable.annotation' });
+  const HASH = token(seq(notPrecededBy(noneOf(' ', '\t', '\n', '\r')), '#'), {
+    scope: 'comment.line',
+    lineComment: {
+      richStarters: [DEC_NAME],
+      continuationBrackets: [['(', ')']],
+      markup: [{ pattern: seq('**', star(noneOf('*', '\n')), '**'), scope: 'markup.bold' }],
+    },
+  });
+  const KEY = token(seq(plus(alpha), followedBy('=')), { scope: 'entity.name.tag' });
+  const FN_NAME = token(seq(plus(alpha), followedBy(seq(star(hspace), '('))), { scope: 'variable.function' });
+  const TEXT = token(plus(noneOf(' ', '\t', '\n', '#', '=', '@', '(', ')', ',')), { scope: 'string.unquoted' });
+  const ArgKV = rule(() => [[KEY, '=', TEXT]]);
+  const Arg = rule(() => [ArgKV, TEXT]);
+  const Args = rule(() => [['(', opt(Arg), ')']]);
+  const Call = rule(() => [[FN_NAME, Args]]);
+  const Part = rule(() => [DEC_NAME, Call, TEXT, KEY, '=', ',', '(', ')']);
+  const Comment = rule(() => [[HASH, many(Part)]]);
+  const Item = rule(() => [[KEY, '=', opt(Call), opt(Comment)]]);
+  const Line = rule(() => [Item, Comment]);
+  const File = rule(() => [[many(Line)]]);
+  const grammar = defineGrammar({
+    name: 'env-spec-ctx',
+    tokens: { WS, HASH, DEC_NAME, KEY, FN_NAME, TEXT },
+    rules: { ArgKV, Arg, Args, Call, Part, Comment, Item, Line, File },
+    contextualScopes: [{ token: KEY, within: [ArgKV], scope: 'entity.other.attribute-name' }],
+    entry: File,
+  });
+
+  const tm = generateTmLanguage(grammar);
+  const callArgs = tm.repository['ctx-call-args'];
+  check('tm: contextualScopes derives a call-args construct region', !!callArgs && callArgs.end === '\\)');
+  const callIncludes = (callArgs?.patterns ?? []).map((pp) => (pp as { include?: string }).include);
+  check('tm: construct region tries contextual overrides before $self',
+    callIncludes[0]?.startsWith('#ctx-scope-') === true && callIncludes[callIncludes.length - 1] === '$self');
+  const override = tm.repository[callIncludes[0]!.slice(1)];
+  check('tm: the override rule carries the contextual scope',
+    override?.name === 'entity.other.attribute-name.env-spec-ctx');
+  const contParen = Object.keys(tm.repository).find((k) => k.startsWith('hash-rich-cont-') && tm.repository[k].begin === '\\(');
+  const contIncludes = contParen ? (tm.repository[contParen].patterns ?? []).map((pp) => (pp as { include?: string }).include) : [];
+  check('tm: continuation-bracket interiors include the contextual overrides',
+    contIncludes.some((n) => n?.startsWith('#ctx-scope-')));
+  check('tm: flat top-level token rule keeps the declared scope',
+    tm.repository.key?.name === 'entity.name.tag.env-spec-ctx');
+  const plain = tm.repository.hash;
+  check('tm: plain comment region carries the declared markup patterns',
+    Array.isArray(plain?.patterns) && plain.patterns.length === 1
+    && (plain.patterns[0] as { name?: string }).name === 'markup.bold.env-spec-ctx');
+
+  const ts = generateTreeSitter(grammar, 'env-spec-ctx');
+  check('tree-sitter: contextual scope emits an exact rule-scoped query, last-wins',
+    ts.highlightsScm.includes('(arg_kv (key) @attribute)')
+    && ts.highlightsScm.lastIndexOf('(arg_kv (key) @attribute)') > ts.highlightsScm.lastIndexOf('Keyword, operator, and punctuation literals'));
 }
 
 console.log(

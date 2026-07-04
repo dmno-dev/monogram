@@ -4819,6 +4819,23 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
   // to the region's own `meta.type.*` name. The classification is the same
   // scope-family test the token loop already uses, so the set is fully derived
   // from the grammar's own token scopes — no hardcoded `"`/digit literals.
+  // ── Contextual token-scope overrides (grammar.contextualScopes, highlight-only) ──
+  // Token T carries scope S within rule R. The FLAT grammar approximates rule context with its
+  // derived CONSTRUCT regions — call-argument lists and lineComment continuation brackets —
+  // where these override rules are tried before the token's flat rule; top-level occurrences
+  // keep the token's declared scope. (tree-sitter consumes the same declaration exactly, as
+  // `(rule (token) @capture)` queries.)
+  const ctxOverrideIncludes = (grammar.contextualScopes ?? []).map((entry, i) => {
+    const target = grammar.tokens.find((t) => t.name === entry.token);
+    if (!target) return null;
+    const ctxKey = `ctx-scope-${i}-${entry.token.toLowerCase()}`;
+    repository[ctxKey] ??= {
+      match: tokenPatternSource(target),
+      name: `${entry.scope}.${langName}`,
+    };
+    return { include: `#${ctxKey}` };
+  }).filter((x): x is { include: string } => !!x);
+
   const literalLiteralKeys: string[] = [];
   const literalTokenNames = new Set<string>();
   const rememberLiteralKey = (scope: string, repoKey: string, tokName?: string) => {
@@ -5029,6 +5046,12 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
       // token's position in the top-level pattern list (declaration order preserved).
       const introducer = tokenPatternSource(tok);
       const commentPunct = `punctuation.definition.comment.${langName}`;
+      // Declared doc-markup patterns (`**bold**`, `__italic__`, …) highlighted inside
+      // PLAIN comment bodies — token-pattern IR, nothing language-specific.
+      const markupPatterns: TmPattern[] = (tok.lineComment.markup ?? []).map((m) => ({
+        match: tokenPatternToRegex(m.pattern),
+        name: `${m.scope}.${langName}`,
+      }));
       const richStarters = (tok.lineComment.richStarters ?? [])
         .map((n) => grammar.tokens.find((t) => t.name === n))
         .filter((t): t is TokenDecl => !!t);
@@ -5061,7 +5084,7 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
             begin: `(${introducer})`,
             beginCaptures: { '1': { name: commentPunct } },
             end: '$',
-            patterns: [],
+            patterns: markupPatterns,
           };
           for (const [open, close] of contBrackets) {
             repository[bracketKeyOf(open)] = {
@@ -5070,6 +5093,7 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
               patterns: [
                 { include: `#${key}-rich-cont-marker` },
                 { include: `#${key}-rich-cont-comment` },
+                ...ctxOverrideIncludes,
                 ...bracketIncludes,
                 { include: '$self' },
               ],
@@ -5090,7 +5114,7 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
         begin: `(${introducer})`,
         beginCaptures: { '1': { name: commentPunct } },
         end: '$',
-        patterns: [],
+        patterns: markupPatterns,
       };
       topPatterns.push({ include: `#${key}` });
 
@@ -7518,6 +7542,49 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
     topPatterns.push({ include: '#function-call' });
   }
 
+  // ── 4b2. Call-argument construct regions (contextualScopes) ──
+  // Only when the grammar declares contextual scopes: a call's argument list becomes a real
+  // begin/end region (callee + `(` … `)`), so the overrides apply inside it — and inside any
+  // nested bracket constructs — while everything else still highlights via $self. The nested
+  // pair regions are NOT top-level includes (a bare top-level `{…}` value keeps flat token
+  // scopes); they exist only inside a call or inside each other.
+  if (hasCallExpr && ctxOverrideIncludes.length) {
+    const allRuleLits = new Set<string>();
+    for (const r of grammar.rules) for (const lit of collectLiterals(r.body)) allRuleLits.add(lit);
+    const ctxPairs = ([['(', ')'], ['[', ']'], ['{', '}']] as [string, string][])
+      .filter(([o, c]) => allRuleLits.has(o) && allRuleLits.has(c) && (o !== '(' || true));
+    const pairKeyOf = (open: string) => `ctx-pair-${[...open].map((ch) => ch.charCodeAt(0).toString(16)).join('')}`;
+    const pairIncludes = ctxPairs.filter(([o]) => o !== '(').map(([o]) => ({ include: `#${pairKeyOf(o)}` }));
+    for (const [open, close] of ctxPairs) {
+      if (open === '(') continue;   // `(` is owned by the call region itself
+      repository[pairKeyOf(open)] = {
+        begin: escapeRegex(open),
+        beginCaptures: { '0': { name: `${getScope(scopeOverrides, open) ?? 'punctuation.section.brackets.begin'}.${langName}` } },
+        end: escapeRegex(close),
+        endCaptures: { '0': { name: `${getScope(scopeOverrides, close) ?? 'punctuation.section.brackets.end'}.${langName}` } },
+        patterns: [...ctxOverrideIncludes, ...pairIncludes, { include: '$self' }],
+      };
+    }
+    // callee scope: reuse the grammar's own callee token scope when one is declared (a token
+    // whose pattern is gated on a following `(`), else the TextMate-conventional call scope
+    const calleeTok = grammar.tokens.find((t) => {
+      const sc = t.scope ?? classifyToken(t).scope;
+      return (sc.startsWith('variable.function') || sc.startsWith('entity.name.function')) && tokenPatternSource(t).includes('\\(');
+    });
+    const calleeScope = calleeTok?.scope ?? 'entity.name.function';
+    repository['ctx-call-args'] = {
+      begin: `(${identPattern})\\s*(\\()`,
+      beginCaptures: {
+        '1': { name: `${calleeScope}.${langName}` },
+        '2': { name: `${getScope(scopeOverrides, '(') ?? 'punctuation.section.parens.begin'}.${langName}` },
+      },
+      end: '\\)',
+      endCaptures: { '0': { name: `${getScope(scopeOverrides, ')') ?? 'punctuation.section.parens.end'}.${langName}` } },
+      patterns: [...ctxOverrideIncludes, ...pairIncludes, { include: '$self' }],
+    };
+    topPatterns.push({ include: '#ctx-call-args' });
+  }
+
   // ── 4b1a. Object method key: `key: (params) => ...` or `key: function(...)` ──
   // In object literals, a property key followed by `:` and a function value
   // should be scoped as entity.name.function (not plain variable.other).
@@ -8460,6 +8527,9 @@ export function generateTmLanguage(grammar: CstGrammar): TmGrammar {
     // tried before #punctuation (which would otherwise claim the `{`/`[` as a bare bracket) and
     // before the scalar tokens. Its `{`/`[` can never lead a plain scalar, so this ranking is safe.
     if (key === 'flow-mapping' || key === 'flow-sequence') return 0.85;
+    // A call-argument construct region (contextualScopes) opens on `ident(` — it must be tried
+    // before the flat callee/ident token rules that would otherwise consume the name alone.
+    if (key === 'ctx-call-args') return 0.87;
     // A top-level token-match scoped `entity.name.tag` (e.g. an indentation grammar's mapping
     // KEY — a scalar that is the LHS of `:`) is a NAME, more specific than any string/typed-value
     // scalar it overlaps, so it must be tried first. (Markup tag names live inside begin/end
